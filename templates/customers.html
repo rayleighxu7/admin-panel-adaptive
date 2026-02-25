@@ -1,0 +1,302 @@
+{% extends "layout.html" %}
+
+{% block title %}Customers — Admin Panel{% endblock %}
+
+{% block header %}
+    <div class="row align-items-center">
+        <div class="col">
+            <h2 class="page-title">
+                <i class="fa fa-users me-2"></i>Customers
+            </h2>
+            <div class="text-muted mt-1" id="customer-summary">Loading&hellip;</div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="col-12">
+    <div class="card">
+        <div class="card-header">
+            <div class="col">
+                <div class="input-icon">
+                    <span class="input-icon-addon"><i class="fa fa-search"></i></span>
+                    <input type="text" class="form-control" id="search-input"
+                           placeholder="Search by name or email&hellip;">
+                </div>
+            </div>
+            <div class="col-auto ms-auto ps-3">
+                <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#customer-drawer" onclick="openCreateModal()">
+                    <i class="fa fa-plus me-1"></i>New Customer
+                </button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter table-hover card-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Date of Birth</th>
+                        <th>Created</th>
+                        <th class="w-1"></th>
+                    </tr>
+                </thead>
+                <tbody id="customers-tbody">
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="fa fa-spinner fa-spin me-1"></i> Loading&hellip;
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer d-flex align-items-center">
+            <div class="text-muted" id="pagination-info"></div>
+            <div class="ms-auto btn-group" id="pagination-btns"></div>
+        </div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="customer-drawer" style="width: 420px;">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="modal-title">New Customer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div id="modal-error" class="alert alert-danger d-none"></div>
+        <input type="hidden" id="edit-id">
+        <div class="mb-3" id="id-field">
+            <label class="form-label">Customer ID <span class="text-muted fw-normal">(optional)</span></label>
+            <input type="text" class="form-control" id="input-id" placeholder="Auto-generated if left blank">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Name</label>
+            <input type="text" class="form-control" id="input-name" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" id="input-email" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Phone</label>
+            <input type="tel" class="form-control" id="input-phone" placeholder="e.g. +61 400 000 000">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Address</label>
+            <textarea class="form-control" id="input-address" rows="2" placeholder="Street, City, State, Postcode"></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Date of Birth</label>
+            <input type="date" class="form-control" id="input-dob">
+        </div>
+    </div>
+    <div class="offcanvas-footer p-3 border-top d-flex">
+        <button type="button" class="btn me-auto" data-bs-dismiss="offcanvas">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveCustomer()">Save</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+(function() {
+    const API = '/api/customers';
+    const tbody = document.getElementById('customers-tbody');
+    const summary = document.getElementById('customer-summary');
+    const searchInput = document.getElementById('search-input');
+    const paginationInfo = document.getElementById('pagination-info');
+    const paginationBtns = document.getElementById('pagination-btns');
+
+    let currentSearch = '';
+    let currentOffset = 0;
+    const LIMIT = 25;
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function formatDate(iso) {
+        const d = new Date(iso);
+        return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function loadCustomers() {
+        let url = `${API}?limit=${LIMIT}&offset=${currentOffset}`;
+        if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                summary.textContent = `${data.total} customer${data.total !== 1 ? 's' : ''}`;
+                renderTable(data.customers);
+                renderPagination(data.total);
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Failed to load: ${esc(err.message)}</td></tr>`;
+            });
+    }
+
+    function renderTable(customers) {
+        if (customers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No customers found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = customers.map(c => `
+            <tr style="cursor:pointer" onclick="if(!event.target.closest('.dropdown'))window.location='/customers/${c.id}'">
+                <td>
+                    <div class="fw-semibold">${esc(c.name)}</div>
+                    <div class="text-muted small">${esc(c.id)}</div>
+                </td>
+                <td>${esc(c.email)}</td>
+                <td>${c.phone ? esc(c.phone) : '<span class="text-muted">—</span>'}</td>
+                <td>${c.date_of_birth ? formatDate(c.date_of_birth) : '<span class="text-muted">—</span>'}</td>
+                <td class="text-muted">${formatDate(c.created_at)}</td>
+                <td>
+                    <div class="dropdown">
+                        <button class="btn btn-ghost-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="fa fa-ellipsis-v"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a class="dropdown-item" href="#" onclick="openEditModal('${c.id}'); return false;">
+                                <i class="fa fa-pen me-2"></i>Edit
+                            </a>
+                            <a class="dropdown-item text-danger" href="#" onclick="deleteCustomer('${c.id}'); return false;">
+                                <i class="fa fa-trash me-2"></i>Delete
+                            </a>
+                        </div>
+                    </div>
+                </td>
+            </tr>`).join('');
+    }
+
+    function renderPagination(total) {
+        const page = Math.floor(currentOffset / LIMIT) + 1;
+        const totalPages = Math.ceil(total / LIMIT) || 1;
+        const from = total === 0 ? 0 : currentOffset + 1;
+        const to = Math.min(currentOffset + LIMIT, total);
+
+        paginationInfo.textContent = `Showing ${from}–${to} of ${total}`;
+
+        let btns = '';
+        if (page > 1) btns += `<button class="btn btn-sm" onclick="goToPage(${page - 1})"><i class="fa fa-chevron-left"></i></button>`;
+        btns += `<button class="btn btn-sm" disabled>Page ${page} of ${totalPages}</button>`;
+        if (page < totalPages) btns += `<button class="btn btn-sm" onclick="goToPage(${page + 1})"><i class="fa fa-chevron-right"></i></button>`;
+        paginationBtns.innerHTML = btns;
+    }
+
+    window.goToPage = function(page) {
+        currentOffset = (page - 1) * LIMIT;
+        loadCustomers();
+    };
+
+    let searchTimeout;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            currentSearch = searchInput.value.trim();
+            currentOffset = 0;
+            loadCustomers();
+        }, 300);
+    });
+
+    function clearForm() {
+        document.getElementById('edit-id').value = '';
+        document.getElementById('input-id').value = '';
+        document.getElementById('input-name').value = '';
+        document.getElementById('input-email').value = '';
+        document.getElementById('input-phone').value = '';
+        document.getElementById('input-address').value = '';
+        document.getElementById('input-dob').value = '';
+        document.getElementById('modal-error').classList.add('d-none');
+    }
+
+    function populateForm(data) {
+        document.getElementById('edit-id').value = data.id;
+        document.getElementById('input-id').value = data.id;
+        document.getElementById('input-name').value = data.name;
+        document.getElementById('input-email').value = data.email;
+        document.getElementById('input-phone').value = data.phone || '';
+        document.getElementById('input-address').value = data.address || '';
+        document.getElementById('input-dob').value = data.date_of_birth || '';
+    }
+
+    window.openCreateModal = function() {
+        document.getElementById('modal-title').textContent = 'New Customer';
+        clearForm();
+        document.getElementById('input-id').value = crypto.randomUUID();
+    };
+
+    window.openEditModal = function(id) {
+        document.getElementById('modal-error').classList.add('d-none');
+        fetch(`${API}/${id}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('modal-title').textContent = 'Edit Customer';
+                populateForm(data);
+                bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('customer-drawer')).show();
+            });
+    };
+
+    window.saveCustomer = function() {
+        const editId = document.getElementById('edit-id').value;
+        const customId = document.getElementById('input-id').value.trim();
+        const name = document.getElementById('input-name').value.trim();
+        const email = document.getElementById('input-email').value.trim();
+        const phone = document.getElementById('input-phone').value.trim();
+        const address = document.getElementById('input-address').value.trim();
+        const dob = document.getElementById('input-dob').value;
+        const errorEl = document.getElementById('modal-error');
+
+        if (!name || !email) {
+            errorEl.textContent = 'Name and email are required';
+            errorEl.classList.remove('d-none');
+            return;
+        }
+
+        const isEdit = !!editId;
+        const url = isEdit ? `${API}/${editId}` : API;
+        const method = isEdit ? 'PATCH' : 'POST';
+
+        const body = { name, email };
+        if (customId) body.id = customId;
+        if (phone) body.phone = phone;
+        if (address) body.address = address;
+        if (dob) body.date_of_birth = dob;
+
+        fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })
+        .then(r => {
+            if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Request failed'); });
+            return r.json();
+        })
+        .then(() => {
+            bootstrap.Offcanvas.getInstance(document.getElementById('customer-drawer')).hide();
+            loadCustomers();
+        })
+        .catch(err => {
+            errorEl.textContent = err.message;
+            errorEl.classList.remove('d-none');
+        });
+    };
+
+    window.deleteCustomer = function(id) {
+        if (!confirm('Are you sure you want to delete this customer?')) return;
+        fetch(`${API}/${id}`, { method: 'DELETE' })
+            .then(r => {
+                if (!r.ok) throw new Error('Delete failed');
+                loadCustomers();
+            })
+            .catch(err => alert(err.message));
+    };
+
+    loadCustomers();
+})();
+</script>
+{% endblock %}

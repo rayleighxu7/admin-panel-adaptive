@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Admin Panel{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/brand.css">
+    <link rel="stylesheet" href="/static/custom.css">
+    {% block head_css %}{% endblock %}
+</head>
+<body class="layout-fluid">
+    <div class="page">
+        <aside class="navbar navbar-vertical navbar-expand-lg" data-bs-theme="dark">
+            <div class="container-fluid">
+                <button class="navbar-toggler" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#sidebar-menu">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-brand navbar-brand-autodark py-3">
+                    <a href="/" class="d-flex align-items-center text-decoration-none">
+                        <span class="sidebar-brand-icon me-2">
+                            <i class="fa fa-cube fa-lg"></i>
+                        </span>
+                        <span class="sidebar-brand-text fw-bold" style="font-size: 1.1rem; letter-spacing: 0.02em;">
+                            Admin Panel
+                        </span>
+                    </a>
+                </div>
+                <div class="collapse navbar-collapse" id="sidebar-menu">
+                    <ul class="navbar-nav pt-lg-2">
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#sidebar-management"
+                               data-bs-toggle="collapse" data-bs-auto-close="false"
+                               role="button" aria-expanded="true">
+                                <span class="nav-link-icon"><i class="fa fa-briefcase"></i></span>
+                                <span class="nav-link-title">Management</span>
+                            </a>
+                            <div class="dropdown-menu collapse show" id="sidebar-management">
+                                <a class="dropdown-item" href="/customers">
+                                    <i class="fa fa-users me-2"></i>Customers
+                                </a>
+                                <a class="dropdown-item" href="/preset-configs">
+                                    <i class="fa fa-sliders me-2"></i>Preset Configs
+                                </a>
+                                <a class="dropdown-item" href="/config-matrix">
+                                    <i class="fa fa-link me-2"></i>Config Matrix
+                                </a>
+                            </div>
+                        </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#sidebar-reference"
+                               data-bs-toggle="collapse" data-bs-auto-close="false"
+                               role="button" aria-expanded="false">
+                                <span class="nav-link-icon"><i class="fa fa-book"></i></span>
+                                <span class="nav-link-title">Reference</span>
+                            </a>
+                            <div class="dropdown-menu collapse" id="sidebar-reference">
+                                <a class="dropdown-item" href="/schema">
+                                    <i class="fa fa-database me-2"></i>DB Schema
+                                </a>
+                                <a class="dropdown-item" href="/docs" target="_blank">
+                                    <i class="fa fa-code me-2"></i>API Docs
+                                </a>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+        <div class="page-wrapper">
+            <div class="container-fluid">
+                <div class="page-header d-print-none">
+                    {% block header %}{% endblock %}
+                </div>
+            </div>
+            <div class="page-body flex-grow-1">
+                <div class="container-fluid">
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js"></script>
+    <script>
+    (function() {
+        document.querySelectorAll('#sidebar-menu .dropdown-menu[id]').forEach(function(menu) {
+            var saved = localStorage.getItem('sidebar-' + menu.id);
+            if (saved === 'open') {
+                menu.classList.add('show');
+                var toggle = document.querySelector('[href="#' + menu.id + '"]');
+                if (toggle) toggle.setAttribute('aria-expanded', 'true');
+            }
+            menu.addEventListener('shown.bs.collapse', function() {
+                localStorage.setItem('sidebar-' + menu.id, 'open');
+            });
+            menu.addEventListener('hidden.bs.collapse', function() {
+                localStorage.setItem('sidebar-' + menu.id, 'closed');
+            });
+        });
+    })();
+    </script>
+    {% block script %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,440 @@
+{% extends "layout.html" %}
+
+{% block title %}Config Matrix — Admin Panel{% endblock %}
+
+{% block header %}
+    <div class="row align-items-center">
+        <div class="col">
+            <h2 class="page-title">
+                <i class="fa fa-link me-2"></i>Config Matrix
+            </h2>
+            <div class="text-muted mt-1" id="matrix-summary">Loading&hellip;</div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="col-12">
+    <div class="card">
+        <div class="card-header">
+            <div class="col">
+                <select class="form-select" id="filter-customer" style="max-width: 300px;">
+                    <option value="">All Customers</option>
+                </select>
+            </div>
+            <div class="col-auto ms-auto ps-3">
+                <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#matrix-drawer" onclick="openCreate()">
+                    <i class="fa fa-plus me-1"></i>Assign Config
+                </button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter table-hover card-table">
+                <thead>
+                    <tr>
+                        <th>Customer</th>
+                        <th>Config Type</th>
+                        <th>Config</th>
+                        <th>Effective From</th>
+                        <th>Created</th>
+                        <th class="w-1"></th>
+                    </tr>
+                </thead>
+                <tbody id="matrix-tbody">
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="fa fa-spinner fa-spin me-1"></i> Loading&hellip;
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer d-flex align-items-center">
+            <div class="text-muted" id="pagination-info"></div>
+            <div class="ms-auto btn-group" id="pagination-btns"></div>
+        </div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="matrix-drawer" style="width: 480px;">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="drawer-title">Assign Config</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div id="drawer-error" class="alert alert-danger d-none"></div>
+        <input type="hidden" id="edit-id">
+        <div class="mb-3" id="customer-field">
+            <label class="form-label">Customer</label>
+            <select class="form-select" id="input-customer" required>
+                <option value="">Select customer&hellip;</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Config Type</label>
+            <select class="form-select" id="input-config-type">
+                <option value="preset">Preset Config</option>
+                <option value="custom">Custom Config</option>
+            </select>
+        </div>
+        <div class="mb-3" id="preset-field">
+            <label class="form-label">Preset Config</label>
+            <select class="form-select" id="input-preset">
+                <option value="">Select preset&hellip;</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Effective From</label>
+            <input type="date" class="form-control" id="input-effective-from" required>
+        </div>
+        <hr class="my-3">
+        <h4 class="mb-3">Config Values</h4>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label">Commission %</label>
+                <input type="number" step="0.01" class="form-control" id="cfg-commission" value="0">
+            </div>
+            <div class="col-6">
+                <label class="form-label">Affiliate %</label>
+                <input type="number" step="0.01" class="form-control" id="cfg-affiliate" value="0">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">GMV %</label>
+            <input type="number" step="0.01" class="form-control" id="cfg-gmv" value="0">
+        </div>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label">Per Order Fee ($)</label>
+                <input type="number" step="0.01" class="form-control" id="cfg-per-order-fee" value="0">
+            </div>
+            <div class="col-6">
+                <label class="form-label">Qty Threshold</label>
+                <input type="number" class="form-control" id="cfg-per-order-threshold" value="0">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Flat Fee ($)</label>
+            <input type="number" step="0.01" class="form-control" id="cfg-flat-fee" value="0">
+        </div>
+    </div>
+    <div class="offcanvas-footer p-3 border-top d-flex">
+        <button type="button" class="btn me-auto" data-bs-dismiss="offcanvas">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveMatrix()">Save</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+(function() {
+    const API = '/api/config-matrix';
+    const tbody = document.getElementById('matrix-tbody');
+    const summary = document.getElementById('matrix-summary');
+    const filterCustomer = document.getElementById('filter-customer');
+    const paginationInfo = document.getElementById('pagination-info');
+    const paginationBtns = document.getElementById('pagination-btns');
+    const configTypeSelect = document.getElementById('input-config-type');
+    const presetField = document.getElementById('preset-field');
+    const presetSelect = document.getElementById('input-preset');
+    const cfgFields = ['cfg-commission', 'cfg-affiliate', 'cfg-gmv', 'cfg-per-order-fee', 'cfg-per-order-threshold', 'cfg-flat-fee'];
+
+    let currentOffset = 0;
+    const LIMIT = 25;
+    let customersCache = [];
+    let presetsCache = [];
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+    }
+
+    function formatDate(iso) {
+        return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function setConfigFields(config, disabled) {
+        document.getElementById('cfg-commission').value = (config.commission_percentage * 100).toFixed(2);
+        document.getElementById('cfg-affiliate').value = (config.affiliate_percentage * 100).toFixed(2);
+        document.getElementById('cfg-gmv').value = (config.gmv_percentage * 100).toFixed(2);
+        document.getElementById('cfg-per-order-fee').value = (config.per_order.fee_cents / 100).toFixed(2);
+        document.getElementById('cfg-per-order-threshold').value = config.per_order.quantity_threshold;
+        document.getElementById('cfg-flat-fee').value = (config.flat_fee_cents / 100).toFixed(2);
+        cfgFields.forEach(id => {
+            const el = document.getElementById(id);
+            el.disabled = disabled;
+            el.style.opacity = disabled ? '0.5' : '1';
+        });
+    }
+
+    function clearConfigFields(disabled) {
+        setConfigFields({
+            commission_percentage: 0, affiliate_percentage: 0, gmv_percentage: 0,
+            per_order: { fee_cents: 0, quantity_threshold: 0 }, flat_fee_cents: 0,
+        }, disabled);
+    }
+
+    function getConfigFromForm() {
+        return {
+            commission_percentage: (parseFloat(document.getElementById('cfg-commission').value) || 0) / 100,
+            affiliate_percentage: (parseFloat(document.getElementById('cfg-affiliate').value) || 0) / 100,
+            gmv_percentage: (parseFloat(document.getElementById('cfg-gmv').value) || 0) / 100,
+            per_order: {
+                fee_cents: Math.round((parseFloat(document.getElementById('cfg-per-order-fee').value) || 0) * 100),
+                quantity_threshold: parseInt(document.getElementById('cfg-per-order-threshold').value) || 0,
+            },
+            flat_fee_cents: Math.round((parseFloat(document.getElementById('cfg-flat-fee').value) || 0) * 100),
+        };
+    }
+
+    function updateConfigTypeUI() {
+        const isPreset = configTypeSelect.value === 'preset';
+        presetField.classList.toggle('d-none', !isPreset);
+        if (isPreset) {
+            const presetId = presetSelect.value;
+            const preset = presetsCache.find(p => p.id == presetId);
+            if (preset) {
+                setConfigFields(preset.config, true);
+            } else {
+                clearConfigFields(true);
+            }
+        } else {
+            cfgFields.forEach(id => {
+                const el = document.getElementById(id);
+                el.disabled = false;
+                el.style.opacity = '1';
+            });
+        }
+    }
+
+    configTypeSelect.addEventListener('change', updateConfigTypeUI);
+
+    presetSelect.addEventListener('change', function() {
+        if (configTypeSelect.value === 'preset') {
+            const preset = presetsCache.find(p => p.id == this.value);
+            if (preset) {
+                setConfigFields(preset.config, true);
+            } else {
+                clearConfigFields(true);
+            }
+        }
+    });
+
+    function loadLookups() {
+        Promise.all([
+            fetch('/api/customers?limit=200').then(r => r.json()),
+            fetch('/api/preset-configs?limit=200').then(r => r.json()),
+        ]).then(([custData, presetData]) => {
+            customersCache = custData.customers;
+            presetsCache = presetData.preset_configs;
+            populateSelects();
+        });
+    }
+
+    function populateSelects() {
+        const custOpts = customersCache.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+
+        document.getElementById('input-customer').innerHTML = '<option value="">Select customer&hellip;</option>' + custOpts;
+        filterCustomer.innerHTML = '<option value="">All Customers</option>' + custOpts;
+
+        const presetOpts = presetsCache.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+        document.getElementById('input-preset').innerHTML = '<option value="">Select preset&hellip;</option>' + presetOpts;
+    }
+
+    function loadMatrix() {
+        let url = `${API}?limit=${LIMIT}&offset=${currentOffset}`;
+        const custId = filterCustomer.value;
+        if (custId) url += `&customer_id=${encodeURIComponent(custId)}`;
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                summary.textContent = `${data.total} assignment${data.total !== 1 ? 's' : ''}`;
+                renderTable(data.config_matrix);
+                renderPagination(data.total);
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Failed to load: ${esc(err.message)}</td></tr>`;
+            });
+    }
+
+    function renderTable(rows) {
+        if (rows.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No config assignments found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = rows.map(m => {
+            const configType = m.preset_config_id ? 'Preset' : 'Custom';
+            const configName = m.preset_config_name || `Custom #${m.custom_config_id}`;
+            const badge = m.preset_config_id
+                ? '<span class="badge bg-blue-lt">Preset</span>'
+                : '<span class="badge bg-purple-lt">Custom</span>';
+
+            return `
+            <tr>
+                <td>
+                    <div class="fw-semibold">${esc(m.customer_name || m.customer_id)}</div>
+                    <div class="text-muted small">${esc(m.customer_id)}</div>
+                </td>
+                <td>${badge}</td>
+                <td>${esc(configName)}</td>
+                <td>${formatDate(m.effective_from)}</td>
+                <td class="text-muted">${formatDate(m.created_at)}</td>
+                <td>
+                    <div class="dropdown">
+                        <button class="btn btn-ghost-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="fa fa-ellipsis-v"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a class="dropdown-item" href="#" onclick="openEdit(${m.id}); return false;">
+                                <i class="fa fa-pen me-2"></i>Edit
+                            </a>
+                            <a class="dropdown-item text-danger" href="#" onclick="deleteMatrix(${m.id}); return false;">
+                                <i class="fa fa-trash me-2"></i>Delete
+                            </a>
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderPagination(total) {
+        const page = Math.floor(currentOffset / LIMIT) + 1;
+        const totalPages = Math.ceil(total / LIMIT) || 1;
+        const from = total === 0 ? 0 : currentOffset + 1;
+        const to = Math.min(currentOffset + LIMIT, total);
+
+        paginationInfo.textContent = `Showing ${from}–${to} of ${total}`;
+
+        let btns = '';
+        if (page > 1) btns += `<button class="btn btn-sm" onclick="goToPage(${page - 1})"><i class="fa fa-chevron-left"></i></button>`;
+        btns += `<button class="btn btn-sm" disabled>Page ${page} of ${totalPages}</button>`;
+        if (page < totalPages) btns += `<button class="btn btn-sm" onclick="goToPage(${page + 1})"><i class="fa fa-chevron-right"></i></button>`;
+        paginationBtns.innerHTML = btns;
+    }
+
+    window.goToPage = function(page) {
+        currentOffset = (page - 1) * LIMIT;
+        loadMatrix();
+    };
+
+    filterCustomer.addEventListener('change', function() {
+        currentOffset = 0;
+        loadMatrix();
+    });
+
+    window.openCreate = function() {
+        document.getElementById('drawer-title').textContent = 'Assign Config';
+        document.getElementById('edit-id').value = '';
+        document.getElementById('input-customer').value = '';
+        document.getElementById('input-config-type').value = 'preset';
+        presetSelect.value = '';
+        document.getElementById('input-effective-from').value = new Date().toISOString().split('T')[0];
+        document.getElementById('customer-field').style.display = '';
+        document.getElementById('drawer-error').classList.add('d-none');
+        clearConfigFields(true);
+        updateConfigTypeUI();
+    };
+
+    window.openEdit = function(id) {
+        document.getElementById('drawer-error').classList.add('d-none');
+        fetch(`${API}/${id}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('drawer-title').textContent = 'Edit Assignment';
+                document.getElementById('edit-id').value = data.id;
+                document.getElementById('input-customer').value = data.customer_id;
+                document.getElementById('input-effective-from').value = data.effective_from;
+                document.getElementById('customer-field').style.display = '';
+
+                if (data.preset_config_id) {
+                    document.getElementById('input-config-type').value = 'preset';
+                    presetSelect.value = data.preset_config_id;
+                } else {
+                    document.getElementById('input-config-type').value = 'custom';
+                    presetSelect.value = '';
+                }
+
+                if (data.config) {
+                    setConfigFields(data.config, !!data.preset_config_id);
+                } else {
+                    clearConfigFields(!!data.preset_config_id);
+                }
+
+                updateConfigTypeUI();
+                if (data.config && !data.preset_config_id) {
+                    setConfigFields(data.config, false);
+                }
+
+                bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('matrix-drawer')).show();
+            });
+    };
+
+    window.saveMatrix = function() {
+        const editId = document.getElementById('edit-id').value;
+        const customerId = document.getElementById('input-customer').value;
+        const configType = document.getElementById('input-config-type').value;
+        const effectiveFrom = document.getElementById('input-effective-from').value;
+        const errorEl = document.getElementById('drawer-error');
+
+        if (!customerId || !effectiveFrom) {
+            errorEl.textContent = 'Customer and effective date are required';
+            errorEl.classList.remove('d-none');
+            return;
+        }
+
+        const body = { customer_id: customerId, effective_from: effectiveFrom };
+
+        if (configType === 'preset') {
+            const presetId = presetSelect.value;
+            if (!presetId) {
+                errorEl.textContent = 'Select a preset config';
+                errorEl.classList.remove('d-none');
+                return;
+            }
+            body.preset_config_id = parseInt(presetId);
+        } else {
+            body.custom_config = getConfigFromForm();
+        }
+
+        const isEdit = !!editId;
+        const url = isEdit ? `${API}/${editId}` : API;
+        const method = isEdit ? 'PATCH' : 'POST';
+
+        fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })
+        .then(r => {
+            if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Request failed'); });
+            return r.json();
+        })
+        .then(() => {
+            bootstrap.Offcanvas.getInstance(document.getElementById('matrix-drawer')).hide();
+            loadMatrix();
+        })
+        .catch(err => {
+            errorEl.textContent = err.message;
+            errorEl.classList.remove('d-none');
+        });
+    };
+
+    window.deleteMatrix = function(id) {
+        if (!confirm('Are you sure you want to remove this config assignment?')) return;
+        fetch(`${API}/${id}`, { method: 'DELETE' })
+            .then(r => {
+                if (!r.ok) throw new Error('Delete failed');
+                loadMatrix();
+            })
+            .catch(err => alert(err.message));
+    };
+
+    loadLookups();
+    loadMatrix();
+})();
+</script>
+{% endblock %}

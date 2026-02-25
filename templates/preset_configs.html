@@ -1,0 +1,325 @@
+{% extends "layout.html" %}
+
+{% block title %}Preset Configs — Admin Panel{% endblock %}
+
+{% block header %}
+    <div class="row align-items-center">
+        <div class="col">
+            <h2 class="page-title">
+                <i class="fa fa-sliders me-2"></i>Preset Configs
+            </h2>
+            <div class="text-muted mt-1" id="preset-summary">Loading&hellip;</div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="col-12">
+    <div class="card">
+        <div class="card-header">
+            <div class="col">
+                <div class="input-icon">
+                    <span class="input-icon-addon"><i class="fa fa-search"></i></span>
+                    <input type="text" class="form-control" id="search-input"
+                           placeholder="Search by name&hellip;">
+                </div>
+            </div>
+            <div class="col-auto ms-auto ps-3">
+                <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#preset-drawer" onclick="openCreate()">
+                    <i class="fa fa-plus me-1"></i>New Preset
+                </button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter table-hover card-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Commission</th>
+                        <th>Affiliate</th>
+                        <th>GMV</th>
+                        <th>Per Order</th>
+                        <th>Flat Fee</th>
+                        <th>Created</th>
+                        <th class="w-1"></th>
+                    </tr>
+                </thead>
+                <tbody id="presets-tbody">
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="fa fa-spinner fa-spin me-1"></i> Loading&hellip;
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer d-flex align-items-center">
+            <div class="text-muted" id="pagination-info"></div>
+            <div class="ms-auto btn-group" id="pagination-btns"></div>
+        </div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="preset-drawer" style="width: 480px;">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="drawer-title">New Preset</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div id="drawer-error" class="alert alert-danger d-none"></div>
+        <input type="hidden" id="edit-id">
+        <div class="mb-3">
+            <label class="form-label">Preset Name</label>
+            <input type="text" class="form-control" id="input-name" required>
+        </div>
+        <hr class="my-3">
+        <h4 class="mb-3">Config</h4>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label">Commission %</label>
+                <input type="number" step="0.01" class="form-control" id="input-commission" value="0">
+            </div>
+            <div class="col-6">
+                <label class="form-label">Affiliate %</label>
+                <input type="number" step="0.01" class="form-control" id="input-affiliate" value="0">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">GMV %</label>
+            <input type="number" step="0.01" class="form-control" id="input-gmv" value="0">
+        </div>
+        <hr class="my-3">
+        <h4 class="mb-3">Per Order</h4>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label">Fee ($)</label>
+                <input type="number" step="0.01" class="form-control" id="input-per-order-fee" value="0">
+            </div>
+            <div class="col-6">
+                <label class="form-label">Qty Threshold</label>
+                <input type="number" class="form-control" id="input-per-order-threshold" value="0">
+            </div>
+        </div>
+        <hr class="my-3">
+        <h4 class="mb-3">Flat Amounts</h4>
+        <div class="mb-3">
+            <label class="form-label">Flat Fee ($)</label>
+            <input type="number" step="0.01" class="form-control" id="input-flat-fee" value="0">
+        </div>
+    </div>
+    <div class="offcanvas-footer p-3 border-top d-flex">
+        <button type="button" class="btn me-auto" data-bs-dismiss="offcanvas">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="savePreset()">Save</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+(function() {
+    const API = '/api/preset-configs';
+    const tbody = document.getElementById('presets-tbody');
+    const summary = document.getElementById('preset-summary');
+    const searchInput = document.getElementById('search-input');
+    const paginationInfo = document.getElementById('pagination-info');
+    const paginationBtns = document.getElementById('pagination-btns');
+
+    let currentSearch = '';
+    let currentOffset = 0;
+    const LIMIT = 25;
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+    }
+
+    function formatDate(iso) {
+        return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function fmtCents(cents) {
+        return '$' + (cents / 100).toFixed(2);
+    }
+
+    function loadPresets() {
+        let url = `${API}?limit=${LIMIT}&offset=${currentOffset}`;
+        if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                summary.textContent = `${data.total} preset${data.total !== 1 ? 's' : ''}`;
+                renderTable(data.preset_configs);
+                renderPagination(data.total);
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Failed to load: ${esc(err.message)}</td></tr>`;
+            });
+    }
+
+    function renderTable(presets) {
+        if (presets.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No preset configs found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = presets.map(p => {
+            const c = p.config;
+            return `
+            <tr style="cursor:pointer" onclick="if(!event.target.closest('.dropdown'))window.location='/preset-configs/${p.id}'">
+                <td>
+                    <div class="fw-semibold">${esc(p.name)}</div>
+                    <div class="text-muted small">ID: ${p.id}</div>
+                </td>
+                <td>${(c.commission_percentage * 100).toFixed(2)}%</td>
+                <td>${(c.affiliate_percentage * 100).toFixed(2)}%</td>
+                <td>${(c.gmv_percentage * 100).toFixed(2)}%</td>
+                <td>${fmtCents(c.per_order.fee_cents)} / ${c.per_order.quantity_threshold} qty</td>
+                <td>${fmtCents(c.flat_fee_cents)}</td>
+                <td class="text-muted">${formatDate(p.created_at)}</td>
+                <td>
+                    <div class="dropdown">
+                        <button class="btn btn-ghost-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="fa fa-ellipsis-v"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a class="dropdown-item" href="#" onclick="openEdit(${p.id}); return false;">
+                                <i class="fa fa-pen me-2"></i>Edit
+                            </a>
+                            <a class="dropdown-item text-danger" href="#" onclick="deletePreset(${p.id}); return false;">
+                                <i class="fa fa-trash me-2"></i>Delete
+                            </a>
+                        </div>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderPagination(total) {
+        const page = Math.floor(currentOffset / LIMIT) + 1;
+        const totalPages = Math.ceil(total / LIMIT) || 1;
+        const from = total === 0 ? 0 : currentOffset + 1;
+        const to = Math.min(currentOffset + LIMIT, total);
+
+        paginationInfo.textContent = `Showing ${from}–${to} of ${total}`;
+
+        let btns = '';
+        if (page > 1) btns += `<button class="btn btn-sm" onclick="goToPage(${page - 1})"><i class="fa fa-chevron-left"></i></button>`;
+        btns += `<button class="btn btn-sm" disabled>Page ${page} of ${totalPages}</button>`;
+        if (page < totalPages) btns += `<button class="btn btn-sm" onclick="goToPage(${page + 1})"><i class="fa fa-chevron-right"></i></button>`;
+        paginationBtns.innerHTML = btns;
+    }
+
+    window.goToPage = function(page) {
+        currentOffset = (page - 1) * LIMIT;
+        loadPresets();
+    };
+
+    let searchTimeout;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            currentSearch = searchInput.value.trim();
+            currentOffset = 0;
+            loadPresets();
+        }, 300);
+    });
+
+    function setFormValues(name, config) {
+        document.getElementById('input-name').value = name;
+        document.getElementById('input-commission').value = (config.commission_percentage * 100).toFixed(2);
+        document.getElementById('input-affiliate').value = (config.affiliate_percentage * 100).toFixed(2);
+        document.getElementById('input-gmv').value = (config.gmv_percentage * 100).toFixed(2);
+        document.getElementById('input-per-order-fee').value = (config.per_order.fee_cents / 100).toFixed(2);
+        document.getElementById('input-per-order-threshold').value = config.per_order.quantity_threshold;
+        document.getElementById('input-flat-fee').value = (config.flat_fee_cents / 100).toFixed(2);
+    }
+
+    function getFormConfig() {
+        return {
+            commission_percentage: (parseFloat(document.getElementById('input-commission').value) || 0) / 100,
+            affiliate_percentage: (parseFloat(document.getElementById('input-affiliate').value) || 0) / 100,
+            gmv_percentage: (parseFloat(document.getElementById('input-gmv').value) || 0) / 100,
+            per_order: {
+                fee_cents: Math.round((parseFloat(document.getElementById('input-per-order-fee').value) || 0) * 100),
+                quantity_threshold: parseInt(document.getElementById('input-per-order-threshold').value) || 0,
+            },
+            flat_fee_cents: Math.round((parseFloat(document.getElementById('input-flat-fee').value) || 0) * 100),
+        };
+    }
+
+    const defaultConfig = {
+        commission_percentage: 0, affiliate_percentage: 0, gmv_percentage: 0,
+        per_order: { fee_cents: 0, quantity_threshold: 0 },
+        flat_fee_cents: 0,
+    };
+
+    window.openCreate = function() {
+        document.getElementById('drawer-title').textContent = 'New Preset';
+        document.getElementById('edit-id').value = '';
+        document.getElementById('drawer-error').classList.add('d-none');
+        setFormValues('', defaultConfig);
+    };
+
+    window.openEdit = function(id) {
+        document.getElementById('drawer-error').classList.add('d-none');
+        fetch(`${API}/${id}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('drawer-title').textContent = 'Edit Preset';
+                document.getElementById('edit-id').value = data.id;
+                setFormValues(data.name, data.config);
+                bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('preset-drawer')).show();
+            });
+    };
+
+    window.savePreset = function() {
+        const editId = document.getElementById('edit-id').value;
+        const name = document.getElementById('input-name').value.trim();
+        const errorEl = document.getElementById('drawer-error');
+
+        if (!name) {
+            errorEl.textContent = 'Name is required';
+            errorEl.classList.remove('d-none');
+            return;
+        }
+
+        const isEdit = !!editId;
+        const url = isEdit ? `${API}/${editId}` : API;
+        const method = isEdit ? 'PATCH' : 'POST';
+
+        fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, config: getFormConfig() }),
+        })
+        .then(r => {
+            if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Request failed'); });
+            return r.json();
+        })
+        .then(() => {
+            bootstrap.Offcanvas.getInstance(document.getElementById('preset-drawer')).hide();
+            loadPresets();
+        })
+        .catch(err => {
+            errorEl.textContent = err.message;
+            errorEl.classList.remove('d-none');
+        });
+    };
+
+    window.deletePreset = function(id) {
+        if (!confirm('Are you sure you want to delete this preset?')) return;
+        fetch(`${API}/${id}`, { method: 'DELETE' })
+            .then(r => {
+                if (!r.ok) throw new Error('Delete failed');
+                loadPresets();
+            })
+            .catch(err => alert(err.message));
+    };
+
+    loadPresets();
+})();
+</script>
+{% endblock %}

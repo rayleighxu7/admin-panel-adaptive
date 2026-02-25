@@ -1,0 +1,184 @@
+{% extends "layout.html" %}
+
+{% block header %}
+    <div class="row align-items-center">
+        <div class="col-auto">
+            <h2 class="page-title">
+                <i class="fa fa-database me-2"></i>Database Schema
+            </h2>
+            <div class="text-muted mt-1" id="schema-summary">Loading&hellip;</div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="col-12 dev-db flex-column" id="schema-container">
+    <div class="text-center py-5 text-muted" id="schema-loading">
+        <i class="fa fa-spinner fa-spin fa-2x"></i>
+        <div class="mt-2">Loading schema&hellip;</div>
+    </div>
+</div>
+
+<style>
+    .dev-db .card-header[data-bs-toggle="collapse"] { cursor: pointer; }
+    .dev-db .card-header[data-bs-toggle="collapse"]:hover { background-color: rgba(0,0,0,.02); }
+    .dev-db code { font-size: 0.875em; color: #d63384; }
+    .dev-db .nav-tabs .nav-link { font-size: 0.875rem; }
+</style>
+{% endblock %}
+
+{% block script %}
+<script>
+(function() {
+    const container = document.getElementById('schema-container');
+    const summary = document.getElementById('schema-summary');
+
+    fetch('/api/schema')
+        .then(r => r.json())
+        .then(data => {
+            summary.textContent = `Developer view — ${data.total_tables} tables, ${data.total_columns} columns, ${data.total_rows} rows`;
+            document.getElementById('schema-loading').remove();
+            data.tables.forEach(renderTable);
+        })
+        .catch(err => {
+            container.innerHTML = `<div class="alert alert-danger">Failed to load schema: ${err.message}</div>`;
+        });
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    function renderTable(table) {
+        const hasIndexes = table.indexes && table.indexes.length > 0;
+        const card = document.createElement('div');
+        card.className = 'card mb-4';
+        card.id = `table-${table.name}`;
+
+        const indexTab = hasIndexes ? `
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab"
+                        data-bs-target="#indexes-${table.name}" type="button" role="tab">
+                    <i class="fa fa-bolt me-1"></i> Indexes
+                </button>
+            </li>` : '';
+
+        const indexBadge = hasIndexes
+            ? `<span class="badge bg-cyan-lt me-1">${table.indexes.length} index${table.indexes.length !== 1 ? 'es' : ''}</span>`
+            : '';
+
+        const indexPane = hasIndexes ? `
+            <div class="tab-pane fade" id="indexes-${table.name}" role="tabpanel">
+                <div class="table-responsive">
+                    <table class="table table-vcenter table-bordered table-sm mb-0">
+                        <thead><tr><th>Index Name</th><th>Columns</th><th class="text-center">Unique</th></tr></thead>
+                        <tbody>
+                            ${table.indexes.map(idx => `<tr>
+                                <td><code>${esc(idx.name || '')}</code></td>
+                                <td>${idx.column_names.map(c => `<span class="badge bg-secondary me-1">${esc(c)}</span>`).join('')}</td>
+                                <td class="text-center">${idx.unique ? '<span class="badge bg-green-lt">UNIQUE</span>' : '<span class="text-muted">No</span>'}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>` : '';
+
+        let dataPreviewContent;
+        if (table.sample_rows.length > 0) {
+            dataPreviewContent = `
+                <div class="table-responsive">
+                    <table class="table table-vcenter table-bordered table-sm table-striped mb-0">
+                        <thead><tr>${table.col_names.map(c => `<th class="text-nowrap"><small>${esc(c)}</small></th>`).join('')}</tr></thead>
+                        <tbody>
+                            ${table.sample_rows.map(row => `<tr>${table.col_names.map(c => {
+                                const val = row[c];
+                                if (val === null || val === undefined) return '<td class="text-nowrap"><small><span class="text-muted fst-italic">NULL</span></small></td>';
+                                const s = String(val);
+                                const display = s.length > 40 ? esc(s.substring(0, 37)) + '&hellip;' : esc(s);
+                                return `<td class="text-nowrap"><small>${display}</small></td>`;
+                            }).join('')}</tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-muted mt-2"><small>Showing ${table.sample_rows.length} of ${table.row_count} rows</small></div>`;
+        } else {
+            dataPreviewContent = `
+                <div class="empty">
+                    <p class="empty-title">No data</p>
+                    <p class="empty-subtitle text-muted">This table has no rows yet.</p>
+                </div>`;
+        }
+
+        card.innerHTML = `
+            <div class="card-header" data-bs-toggle="collapse" data-bs-target="#collapse-${table.name}">
+                <h3 class="card-title">
+                    <i class="fa fa-table me-2 text-primary"></i>
+                    <span style="font-family: monospace; font-size: 1.05em;">${esc(table.name)}</span>
+                </h3>
+                <div class="card-actions">
+                    <span class="badge bg-blue-lt me-1">${table.row_count} row${table.row_count !== 1 ? 's' : ''}</span>
+                    <span class="badge bg-purple-lt me-1">${table.columns.length} col${table.columns.length !== 1 ? 's' : ''}</span>
+                    ${indexBadge}
+                    <i class="fa fa-chevron-down ms-1 text-muted"></i>
+                </div>
+            </div>
+            <div id="collapse-${table.name}" class="collapse show">
+                <div class="card-body p-0">
+                    <ul class="nav nav-tabs nav-fill px-3 pt-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" data-bs-toggle="tab"
+                                    data-bs-target="#schema-${table.name}" type="button" role="tab">
+                                <i class="fa fa-columns me-1"></i> Schema
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" data-bs-toggle="tab"
+                                    data-bs-target="#data-${table.name}" type="button" role="tab">
+                                <i class="fa fa-th-list me-1"></i> Data Preview
+                                <span class="badge bg-secondary ms-1">${table.sample_rows.length}</span>
+                            </button>
+                        </li>
+                        ${indexTab}
+                    </ul>
+                    <div class="tab-content p-3">
+                        <div class="tab-pane fade show active" id="schema-${table.name}" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-vcenter table-bordered table-sm mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 30%">Column</th>
+                                            <th style="width: 20%">Type</th>
+                                            <th style="width: 10%" class="text-center">Nullable</th>
+                                            <th style="width: 15%">Default</th>
+                                            <th style="width: 25%">Constraints</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${table.columns.map(col => `<tr>
+                                            <td><code>${esc(col.name)}</code></td>
+                                            <td><span class="badge bg-cyan-lt" style="font-family: monospace">${esc(col.type)}</span></td>
+                                            <td class="text-center">${col.nullable ? '<span class="text-muted">YES</span>' : '<span class="text-danger fw-bold">NO</span>'}</td>
+                                            <td>${col.default ? `<code class="text-muted">${esc(col.default)}</code>` : '<span class="text-muted">&mdash;</span>'}</td>
+                                            <td>
+                                                ${col.is_pk ? '<span class="badge bg-yellow-lt me-1"><i class="fa fa-key me-1"></i>PK</span>' : ''}
+                                                ${col.fk_ref ? `<span class="badge bg-green-lt"><i class="fa fa-link me-1"></i>FK &rarr; ${esc(col.fk_ref)}</span>` : ''}
+                                            </td>
+                                        </tr>`).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="data-${table.name}" role="tabpanel">
+                            ${dataPreviewContent}
+                        </div>
+                        ${indexPane}
+                    </div>
+                </div>
+            </div>`;
+
+        container.appendChild(card);
+    }
+})();
+</script>
+{% endblock %}

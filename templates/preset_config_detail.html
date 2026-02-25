@@ -1,0 +1,140 @@
+{% extends "layout.html" %}
+
+{% block title %}Preset Config Detail — Admin Panel{% endblock %}
+
+{% block header %}
+    <div class="row align-items-center">
+        <div class="col">
+            <h2 class="page-title">
+                <i class="fa fa-sliders me-2"></i>Preset Configs
+            </h2>
+            <div class="text-muted mt-1">
+                <a href="/preset-configs" class="text-decoration-none text-muted">
+                    <i class="fa fa-arrow-left me-1"></i>Back to all presets
+                </a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="col-12">
+    <div class="row">
+        <div class="col-lg-5">
+            <div class="card mb-4">
+                <div class="card-header"><h3 class="card-title">Config Values</h3></div>
+                <div class="card-body" id="config-body">
+                    <div class="text-center text-muted py-3">
+                        <i class="fa fa-spinner fa-spin"></i> Loading&hellip;
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="card-title">Customers Using This Preset</h3>
+                    <div class="card-actions">
+                        <span class="badge bg-blue-lt" id="customer-count">0</span>
+                    </div>
+                </div>
+                <div class="table-responsive" id="customers-body">
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin"></i> Loading&hellip;
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+(function() {
+    const PRESET_ID = {{ preset_id }};
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = String(str ?? '');
+        return d.innerHTML;
+    }
+
+    function formatDate(iso) {
+        if (!iso) return '—';
+        return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function fmtPct(val) { return (val * 100).toFixed(2) + '%'; }
+    function fmtDollars(cents) { return '$' + (cents / 100).toFixed(2); }
+
+    function loadPreset() {
+        fetch(`/api/preset-configs/${PRESET_ID}`)
+            .then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); })
+            .then(data => {
+                const c = data.config;
+                document.getElementById('config-body').innerHTML = `
+                    <div class="mb-3"><h3 class="mb-0">${esc(data.name)}</h3><div class="text-muted small">ID: ${data.id}</div></div>
+                    <div class="row mb-2">
+                        <div class="col-6"><label class="form-label text-muted mb-0">Commission</label><div>${fmtPct(c.commission_percentage)}</div></div>
+                        <div class="col-6"><label class="form-label text-muted mb-0">Affiliate</label><div>${fmtPct(c.affiliate_percentage)}</div></div>
+                    </div>
+                    <div class="mb-2"><label class="form-label text-muted mb-0">GMV</label><div>${fmtPct(c.gmv_percentage)}</div></div>
+                    <hr class="my-2">
+                    <div class="row mb-2">
+                        <div class="col-6"><label class="form-label text-muted mb-0">Per Order Fee</label><div>${fmtDollars(c.per_order.fee_cents)}</div></div>
+                        <div class="col-6"><label class="form-label text-muted mb-0">Qty Threshold</label><div>${c.per_order.quantity_threshold}</div></div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="mb-2"><label class="form-label text-muted mb-0">Flat Fee</label><div>${fmtDollars(c.flat_fee_cents)}</div></div>
+                    <hr class="my-2">
+                    <div class="row">
+                        <div class="col-6"><label class="form-label text-muted mb-0">Created</label><div>${formatDate(data.created_at)}</div></div>
+                        <div class="col-6"><label class="form-label text-muted mb-0">Updated</label><div>${formatDate(data.updated_at)}</div></div>
+                    </div>
+                `;
+            })
+            .catch(() => {
+                document.getElementById('config-body').innerHTML = '<div class="text-center text-danger py-3">Preset not found</div>';
+            });
+    }
+
+    function loadCustomers() {
+        fetch(`/api/config-matrix?limit=200`)
+            .then(r => r.json())
+            .then(data => {
+                const linked = data.config_matrix.filter(m => m.preset_config_id === PRESET_ID);
+                document.getElementById('customer-count').textContent = linked.length;
+
+                const container = document.getElementById('customers-body');
+                if (linked.length === 0) {
+                    container.innerHTML = '<div class="text-center text-muted py-4">No customers assigned to this preset</div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <table class="table table-vcenter table-hover card-table mb-0">
+                        <thead>
+                            <tr><th>Customer</th><th>Effective From</th><th>Assigned</th></tr>
+                        </thead>
+                        <tbody>
+                            ${linked.map(m => `
+                                <tr style="cursor:pointer" onclick="window.location='/customers/${m.customer_id}'">
+                                    <td>
+                                        <div class="fw-semibold">${esc(m.customer_name || m.customer_id)}</div>
+                                        <div class="text-muted small">${esc(m.customer_id)}</div>
+                                    </td>
+                                    <td>${formatDate(m.effective_from)}</td>
+                                    <td class="text-muted">${formatDate(m.created_at)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>`;
+            });
+    }
+
+    loadPreset();
+    loadCustomers();
+})();
+</script>
+{% endblock %}

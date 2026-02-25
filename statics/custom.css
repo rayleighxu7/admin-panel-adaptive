@@ -1,0 +1,62 @@
+/* Sidebar branding */
+.navbar-vertical {
+    background-color: var(--brand-sidebar-bg) !important;
+}
+
+.navbar-vertical .navbar-nav .nav-link {
+    color: var(--brand-sidebar-text) !important;
+    opacity: 0.8;
+}
+
+.navbar-vertical .navbar-nav .nav-link:hover,
+.navbar-vertical .navbar-nav .nav-link.active {
+    opacity: 1;
+}
+
+.navbar-vertical .navbar-brand a,
+.navbar-vertical .navbar-brand h3 {
+    color: var(--brand-sidebar-text) !important;
+}
+
+/* Primary button branding */
+.btn-primary {
+    background-color: var(--brand-primary) !important;
+    border-color: var(--brand-primary) !important;
+}
+
+.btn-primary:hover {
+    filter: brightness(0.9);
+}
+
+.btn-success {
+    background-color: var(--brand-success) !important;
+    border-color: var(--brand-success) !important;
+}
+
+.btn-danger {
+    background-color: var(--brand-danger) !important;
+    border-color: var(--brand-danger) !important;
+}
+
+/* Links */
+a {
+    color: var(--brand-primary);
+}
+
+a:hover {
+    color: var(--brand-primary);
+    filter: brightness(0.85);
+}
+
+/* Form focus states */
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb), 0.15);
+}
+
+/* Active nav indicator */
+.navbar-vertical .nav-link.active {
+    border-left: 3px solid var(--brand-primary);
+    padding-left: calc(1rem - 3px);
+}
