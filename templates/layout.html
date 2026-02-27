@@ -99,6 +99,35 @@
                 localStorage.setItem('sidebar-' + menu.id, 'closed');
             });
         });
+
+        var currentPath = window.location.pathname;
+        var links = Array.from(document.querySelectorAll('#sidebar-menu .dropdown-item[href^="/"]'));
+        var activeLink = null;
+        var longestMatch = 0;
+
+        links.forEach(function(link) {
+            var href = link.getAttribute('href');
+            if (!href) return;
+            if (href === '/') return;
+
+            var isMatch = currentPath === href || currentPath.startsWith(href + '/');
+            if (isMatch && href.length > longestMatch) {
+                activeLink = link;
+                longestMatch = href.length;
+            }
+        });
+
+        if (activeLink) {
+            activeLink.classList.add('active');
+            var parentMenu = activeLink.closest('.dropdown-menu.collapse');
+            if (parentMenu && !parentMenu.classList.contains('show')) {
+                parentMenu.classList.add('show');
+            }
+            if (parentMenu) {
+                var toggle = document.querySelector('[href="#' + parentMenu.id + '"]');
+                if (toggle) toggle.setAttribute('aria-expanded', 'true');
+            }
+        }
     })();
     </script>
     {% block script %}{% endblock %}

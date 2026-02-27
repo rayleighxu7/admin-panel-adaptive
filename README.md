@@ -23,6 +23,7 @@ A flexible, API-first admin panel built with FastAPI and SQLAlchemy ORM. Connect
 ```bash
 uv sync
 cp .env.example .env
+uv run python local_db_setup.py
 uv run uvicorn app.main:app --reload
 ```
 
@@ -30,7 +31,13 @@ Open http://localhost:8000 to access the admin panel.
 
 ## Database Setup
 
-The application reads from an existing database — it does not create or migrate tables. Set up your database schema externally using the SQL definitions below, then connect via `DATABASE_URL` in your `.env` file.
+For local SQLite development, initialize tables from the SQLAlchemy models:
+
+```bash
+uv run python local_db_setup.py
+```
+
+For existing or non-SQLite databases, set up your schema externally using the SQL definitions below, then connect via `DATABASE_URL` in your `.env` file.
 
 ### Schema Definition
 

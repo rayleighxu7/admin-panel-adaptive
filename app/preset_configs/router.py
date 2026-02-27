@@ -5,10 +5,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import CustomerConfigMatrix, PresetConfig
+from app.models import Customer, CustomerConfigMatrix, PresetConfig
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -46,6 +47,7 @@ class PresetConfigOut(BaseModel):
     config: ConfigSchema
     created_at: datetime
     updated_at: datetime
+    customer_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -84,8 +86,42 @@ async def list_preset_configs(
     total = query.count()
     presets = query.order_by(PresetConfig.name).offset(offset).limit(limit).all()
 
+    preset_ids = [p.id for p in presets]
+    counts_by_preset: dict[int, int] = {}
+    if preset_ids:
+        count_rows = (
+            db.query(
+                CustomerConfigMatrix.preset_config_id,
+                func.count(CustomerConfigMatrix.id),
+            )
+            .join(
+                Customer,
+                Customer.id == CustomerConfigMatrix.customer_id,
+            )
+            .filter(
+                CustomerConfigMatrix.deleted_at.is_(None),
+                CustomerConfigMatrix.preset_config_id.in_(preset_ids),
+                Customer.deleted_at.is_(None),
+            )
+            .group_by(CustomerConfigMatrix.preset_config_id)
+            .all()
+        )
+        counts_by_preset = {
+            preset_id: count for preset_id, count in count_rows if preset_id is not None
+        }
+
     return PresetConfigListResponse(
-        preset_configs=[PresetConfigOut.model_validate(p) for p in presets],
+        preset_configs=[
+            PresetConfigOut(
+                id=p.id,
+                name=p.name,
+                config=ConfigSchema(**p.config),
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+                customer_count=counts_by_preset.get(p.id, 0),
+            )
+            for p in presets
+        ],
         total=total,
     )
 

@@ -40,13 +40,14 @@
                         <th>GMV</th>
                         <th>Per Order</th>
                         <th>Flat Fee</th>
+                        <th>Users</th>
                         <th>Created</th>
                         <th class="w-1"></th>
                     </tr>
                 </thead>
                 <tbody id="presets-tbody">
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-4">
+                        <td colspan="9" class="text-center text-muted py-4">
                             <i class="fa fa-spinner fa-spin me-1"></i> Loading&hellip;
                         </td>
                     </tr>
@@ -154,13 +155,13 @@
                 renderPagination(data.total);
             })
             .catch(err => {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Failed to load: ${esc(err.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center text-danger py-4">Failed to load: ${esc(err.message)}</td></tr>`;
             });
     }
 
     function renderTable(presets) {
         if (presets.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No preset configs found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No preset configs found</td></tr>';
             return;
         }
 
@@ -177,6 +178,7 @@
                 <td>${(c.gmv_percentage * 100).toFixed(2)}%</td>
                 <td>${fmtCents(c.per_order.fee_cents)} / ${c.per_order.quantity_threshold} qty</td>
                 <td>${fmtCents(c.flat_fee_cents)}</td>
+                <td><span class="badge bg-blue-lt">${p.customer_count ?? 0}</span></td>
                 <td class="text-muted">${formatDate(p.created_at)}</td>
                 <td>
                     <div class="dropdown">
