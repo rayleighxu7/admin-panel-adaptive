@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.templating import Jinja2Templates
@@ -99,6 +100,9 @@ def _to_out(m: CustomerConfigMatrix) -> ConfigMatrixOut:
 @router.get("", response_model=ConfigMatrixListResponse)
 async def list_config_matrix(
     customer_id: str | None = Query(None, description="Filter by customer"),
+    config_type: Literal["preset", "custom"] | None = Query(None, description="Filter by config type"),
+    preset_config_id: int | None = Query(None, description="Filter by preset config ID"),
+    custom_config_id: int | None = Query(None, description="Filter by custom config ID"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -107,6 +111,17 @@ async def list_config_matrix(
 
     if customer_id:
         query = query.filter(CustomerConfigMatrix.customer_id == customer_id)
+
+    if config_type == "preset":
+        query = query.filter(CustomerConfigMatrix.preset_config_id.is_not(None))
+    elif config_type == "custom":
+        query = query.filter(CustomerConfigMatrix.custom_config_id.is_not(None))
+
+    if preset_config_id is not None:
+        query = query.filter(CustomerConfigMatrix.preset_config_id == preset_config_id)
+
+    if custom_config_id is not None:
+        query = query.filter(CustomerConfigMatrix.custom_config_id == custom_config_id)
 
     total = query.count()
     rows = query.order_by(CustomerConfigMatrix.effective_from.desc()).offset(offset).limit(limit).all()

@@ -15,21 +15,49 @@
 
 {% block content %}
 <div class="col-12">
-    <div class="card">
-        <div class="card-header">
-            <div class="col">
-                <select class="form-select" id="filter-customer" style="max-width: 300px;">
-                    <option value="">All Customers</option>
-                </select>
+    <div class="card matrix-card">
+        <div class="card-header list-header-row">
+            <div class="col list-toolbar">
+                <div class="searchable-filter filter-control">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="filter-customer"
+                        placeholder="All Customers (type to search)"
+                        autocomplete="off"
+                    >
+                    <div class="searchable-filter-menu d-none" id="filter-customer-menu"></div>
+                </div>
+                <div class="searchable-filter filter-control">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="filter-config-type-search"
+                        placeholder="All Config Types"
+                        autocomplete="off"
+                    >
+                    <div class="searchable-filter-menu d-none" id="filter-config-type-menu"></div>
+                </div>
+                <input type="hidden" id="filter-config-type" value="">
+                <div class="searchable-filter filter-control">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="filter-config"
+                        placeholder="All Configs (type to search)"
+                        autocomplete="off"
+                    >
+                    <div class="searchable-filter-menu d-none" id="filter-config-menu"></div>
+                </div>
             </div>
-            <div class="col-auto ms-auto ps-3">
+            <div class="col-auto ms-auto ps-2 list-toolbar-actions">
                 <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#matrix-drawer" onclick="openCreate()">
                     <i class="fa fa-plus me-1"></i>Assign Config
                 </button>
             </div>
         </div>
         <div class="table-responsive">
-            <table class="table table-vcenter table-hover card-table">
+            <table class="table table-vcenter table-hover card-table table-modern">
                 <thead>
                     <tr>
                         <th>Customer</th>
@@ -56,7 +84,7 @@
     </div>
 </div>
 
-<div class="offcanvas offcanvas-end" tabindex="-1" id="matrix-drawer" style="width: 480px;">
+<div class="offcanvas offcanvas-end drawer-lg" tabindex="-1" id="matrix-drawer">
     <div class="offcanvas-header">
         <h5 class="offcanvas-title" id="drawer-title">Assign Config</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
@@ -66,29 +94,52 @@
         <input type="hidden" id="edit-id">
         <div class="mb-3" id="customer-field">
             <label class="form-label">Customer</label>
-            <select class="form-select" id="input-customer" required>
-                <option value="">Select customer&hellip;</option>
-            </select>
+            <div class="searchable-filter">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="input-customer-search"
+                    placeholder="Select customer (type to search)"
+                    autocomplete="off"
+                >
+                <div class="searchable-filter-menu d-none" id="input-customer-menu"></div>
+            </div>
+            <input type="hidden" id="input-customer" required>
         </div>
         <div class="mb-3">
             <label class="form-label">Config Type</label>
-            <select class="form-select" id="input-config-type">
-                <option value="preset">Preset Config</option>
-                <option value="custom">Custom Config</option>
-            </select>
+            <div class="searchable-filter">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="input-config-type-search"
+                    placeholder="Select config type"
+                    autocomplete="off"
+                >
+                <div class="searchable-filter-menu d-none" id="input-config-type-menu"></div>
+            </div>
+            <input type="hidden" id="input-config-type" value="preset">
         </div>
         <div class="mb-3" id="preset-field">
             <label class="form-label">Preset Config</label>
-            <select class="form-select" id="input-preset">
-                <option value="">Select preset&hellip;</option>
-            </select>
+            <div class="searchable-filter">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="input-preset-search"
+                    placeholder="Select preset (type to search)"
+                    autocomplete="off"
+                >
+                <div class="searchable-filter-menu d-none" id="input-preset-menu"></div>
+            </div>
+            <input type="hidden" id="input-preset">
         </div>
         <div class="mb-3">
             <label class="form-label">Effective From</label>
             <input type="date" class="form-control" id="input-effective-from" required>
         </div>
         <hr class="my-3">
-        <h4 class="mb-3">Config Values</h4>
+        <div class="form-section-title">Config Values</div>
         <div class="row mb-3">
             <div class="col-6">
                 <label class="form-label">Commission %</label>
@@ -132,10 +183,23 @@
     const tbody = document.getElementById('matrix-tbody');
     const summary = document.getElementById('matrix-summary');
     const filterCustomer = document.getElementById('filter-customer');
+    const filterCustomerMenu = document.getElementById('filter-customer-menu');
+    const filterConfigType = document.getElementById('filter-config-type');
+    const filterConfigTypeSearch = document.getElementById('filter-config-type-search');
+    const filterConfigTypeMenu = document.getElementById('filter-config-type-menu');
+    const filterConfig = document.getElementById('filter-config');
+    const filterConfigMenu = document.getElementById('filter-config-menu');
     const paginationInfo = document.getElementById('pagination-info');
     const paginationBtns = document.getElementById('pagination-btns');
     const configTypeSelect = document.getElementById('input-config-type');
+    const drawerConfigTypeSearch = document.getElementById('input-config-type-search');
+    const drawerConfigTypeMenu = document.getElementById('input-config-type-menu');
     const presetField = document.getElementById('preset-field');
+    const drawerCustomerSearch = document.getElementById('input-customer-search');
+    const drawerCustomerMenu = document.getElementById('input-customer-menu');
+    const drawerCustomerInput = document.getElementById('input-customer');
+    const drawerPresetSearch = document.getElementById('input-preset-search');
+    const drawerPresetMenu = document.getElementById('input-preset-menu');
     const presetSelect = document.getElementById('input-preset');
     const cfgFields = ['cfg-commission', 'cfg-affiliate', 'cfg-gmv', 'cfg-per-order-fee', 'cfg-per-order-threshold', 'cfg-flat-fee'];
 
@@ -143,6 +207,22 @@
     const LIMIT = 25;
     let customersCache = [];
     let presetsCache = [];
+    const customConfigMap = new Map();
+    let customerFilterOptions = [];
+    let configFilterOptions = [];
+    let drawerCustomerOptions = [];
+    let drawerPresetOptions = [];
+    const headerConfigTypeOptions = [
+        { key: '', label: 'All Config Types', subtext: '' },
+        { key: 'preset', label: 'Preset', subtext: '' },
+        { key: 'custom', label: 'Custom', subtext: '' },
+    ];
+    const drawerConfigTypeOptions = [
+        { key: 'preset', label: 'Preset Config', subtext: '' },
+        { key: 'custom', label: 'Custom Config', subtext: '' },
+    ];
+    let selectedCustomerFilter = '';
+    let selectedConfigFilter = '';
 
     function esc(str) {
         const d = document.createElement('div');
@@ -164,7 +244,6 @@
         cfgFields.forEach(id => {
             const el = document.getElementById(id);
             el.disabled = disabled;
-            el.style.opacity = disabled ? '0.5' : '1';
         });
     }
 
@@ -203,7 +282,6 @@
             cfgFields.forEach(id => {
                 const el = document.getElementById(id);
                 el.disabled = false;
-                el.style.opacity = '1';
             });
         }
     }
@@ -233,23 +311,316 @@
     }
 
     function populateSelects() {
-        const custOpts = customersCache.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+        customerFilterOptions = customersCache.map(c => ({
+            id: c.id,
+            label: c.name,
+            subtext: c.id,
+        }));
+        drawerCustomerOptions = customerFilterOptions.map(c => ({
+            key: c.id,
+            label: c.label,
+            subtext: c.subtext,
+        }));
+        syncSelectedFilterInput('customer');
 
-        document.getElementById('input-customer').innerHTML = '<option value="">Select customer&hellip;</option>' + custOpts;
-        filterCustomer.innerHTML = '<option value="">All Customers</option>' + custOpts;
-
-        const presetOpts = presetsCache.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
-        document.getElementById('input-preset').innerHTML = '<option value="">Select preset&hellip;</option>' + presetOpts;
+        drawerPresetOptions = presetsCache.map(p => ({
+            key: String(p.id),
+            label: p.name,
+            subtext: `Preset #${p.id}`,
+        }));
+        populateConfigFilterOptions();
+        syncDrawerSelectionInput('customer');
+        syncDrawerSelectionInput('preset');
     }
+
+    function syncCustomConfigOptions(rows) {
+        rows.forEach(m => {
+            if (m.custom_config_id) {
+                const id = String(m.custom_config_id);
+                if (!customConfigMap.has(id)) {
+                    customConfigMap.set(id, `Custom #${id}`);
+                }
+            }
+        });
+    }
+
+    function populateConfigFilterOptions() {
+        const type = filterConfigType.value;
+        configFilterOptions = [];
+
+        if (!type || type === 'preset') {
+            configFilterOptions.push(
+                ...presetsCache.map(p => ({
+                    value: `preset:${p.id}`,
+                    label: p.name,
+                    subtext: `Preset #${p.id}`,
+                }))
+            );
+        }
+
+        if (!type || type === 'custom') {
+            configFilterOptions.push(
+                ...Array.from(customConfigMap.entries())
+                .sort((a, b) => Number(a[0]) - Number(b[0]))
+                .map(([id, name]) => ({
+                    value: `custom:${id}`,
+                    label: name,
+                    subtext: `Custom #${id}`,
+                }))
+            );
+        }
+
+        if (selectedConfigFilter && !configFilterOptions.some(o => o.value === selectedConfigFilter)) {
+            selectedConfigFilter = '';
+        }
+        syncSelectedFilterInput('config');
+    }
+
+    function filteredOptions(options, query) {
+        const q = query.trim().toLowerCase();
+        if (!q) return options;
+        return options.filter(o =>
+            String(o.label).toLowerCase().includes(q) ||
+            String(o.subtext || '').toLowerCase().includes(q)
+        );
+    }
+
+    function renderSearchableMenu(menuEl, options, keyName) {
+        if (!options.length) {
+            menuEl.innerHTML = '<div class="searchable-filter-empty">No matches</div>';
+            menuEl.dataset.options = '[]';
+            return;
+        }
+
+        menuEl.dataset.options = JSON.stringify(options.map(o => ({ key: o[keyName], label: o.label, subtext: o.subtext || '' })));
+        menuEl.innerHTML = options.map((o, idx) => `
+            <button type="button" class="searchable-filter-option" data-index="${idx}">
+                <span class="searchable-filter-option-main">${esc(o.label)}</span>
+                ${o.subtext ? `<span class="searchable-filter-option-sub">${esc(o.subtext)}</span>` : ''}
+            </button>
+        `).join('');
+    }
+
+    function applyTableFilters() {
+        currentOffset = 0;
+        loadMatrix();
+    }
+
+    function syncSelectedFilterInput(kind) {
+        if (kind === 'customer') {
+            const selected = customerFilterOptions.find(o => o.id === selectedCustomerFilter);
+            filterCustomer.value = selected ? selected.label : '';
+            return;
+        }
+        const selected = configFilterOptions.find(o => o.value === selectedConfigFilter);
+        filterConfig.value = selected ? selected.label : '';
+    }
+
+    function bindSearchableFilter(inputEl, menuEl, getOptions, keyName, onPick, onClear) {
+        const wrapperEl = inputEl.closest('.searchable-filter');
+
+        function closeAllSearchableMenus() {
+            document.querySelectorAll('.searchable-filter-menu').forEach(function(menu) {
+                if (menu !== menuEl) menu.classList.add('d-none');
+            });
+            document.querySelectorAll('.searchable-filter.is-open').forEach(function(el) {
+                if (el !== wrapperEl) el.classList.remove('is-open');
+            });
+        }
+
+        function openMenu() {
+            closeAllSearchableMenus();
+            menuEl.classList.remove('d-none');
+            if (wrapperEl) wrapperEl.classList.add('is-open');
+        }
+
+        function closeMenu() {
+            menuEl.classList.add('d-none');
+            if (wrapperEl) wrapperEl.classList.remove('is-open');
+        }
+
+        function refreshMenu() {
+            const options = filteredOptions(getOptions(), inputEl.value);
+            renderSearchableMenu(menuEl, options, keyName);
+            openMenu();
+            return options;
+        }
+
+        inputEl.addEventListener('focus', refreshMenu);
+        inputEl.addEventListener('input', function() {
+            if (!inputEl.value.trim()) {
+                onClear();
+                applyTableFilters();
+            }
+            refreshMenu();
+        });
+        inputEl.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const options = filteredOptions(getOptions(), inputEl.value);
+                if (options.length > 0) {
+                    const first = options[0];
+                    onPick({
+                        key: first[keyName],
+                        label: first.label,
+                        subtext: first.subtext || '',
+                    });
+                } else {
+                    onClear();
+                    inputEl.value = '';
+                    applyTableFilters();
+                }
+                closeMenu();
+            } else if (event.key === 'Escape') {
+                closeMenu();
+            }
+        });
+        inputEl.addEventListener('blur', function() {
+            setTimeout(closeMenu, 120);
+        });
+        menuEl.addEventListener('mousedown', function(event) {
+            event.preventDefault();
+        });
+        menuEl.addEventListener('click', function(event) {
+            const button = event.target.closest('.searchable-filter-option');
+            if (!button) return;
+            const options = JSON.parse(menuEl.dataset.options || '[]');
+            const pick = options[Number(button.dataset.index)];
+            if (!pick) return;
+            onPick(pick);
+            closeMenu();
+        });
+    }
+
+    function syncDrawerSelectionInput(kind) {
+        if (kind === 'customer') {
+            const selected = drawerCustomerOptions.find(o => o.key === drawerCustomerInput.value);
+            drawerCustomerSearch.value = selected ? selected.label : '';
+            return;
+        }
+        if (kind === 'preset') {
+            const selected = drawerPresetOptions.find(o => o.key === String(presetSelect.value || ''));
+            drawerPresetSearch.value = selected ? selected.label : '';
+            return;
+        }
+        const selectedType = drawerConfigTypeOptions.find(o => o.key === String(configTypeSelect.value || 'preset'));
+        drawerConfigTypeSearch.value = selectedType ? selectedType.label : 'Preset Config';
+    }
+
+    bindSearchableFilter(
+        filterCustomer,
+        filterCustomerMenu,
+        () => customerFilterOptions,
+        'id',
+        function(pick) {
+            selectedCustomerFilter = pick.key;
+            filterCustomer.value = pick.label;
+            applyTableFilters();
+        },
+        function() {
+            selectedCustomerFilter = '';
+        }
+    );
+
+    bindSearchableFilter(
+        filterConfigTypeSearch,
+        filterConfigTypeMenu,
+        () => headerConfigTypeOptions,
+        'key',
+        function(pick) {
+            filterConfigType.value = pick.key;
+            filterConfigTypeSearch.value = pick.label;
+            filterConfigType.dispatchEvent(new Event('change'));
+        },
+        function() {
+            filterConfigType.value = '';
+            filterConfigTypeSearch.value = 'All Config Types';
+            filterConfigType.dispatchEvent(new Event('change'));
+        }
+    );
+
+    bindSearchableFilter(
+        filterConfig,
+        filterConfigMenu,
+        () => configFilterOptions,
+        'value',
+        function(pick) {
+            selectedConfigFilter = pick.key;
+            filterConfig.value = pick.label;
+            applyTableFilters();
+        },
+        function() {
+            selectedConfigFilter = '';
+        }
+    );
+
+    bindSearchableFilter(
+        drawerConfigTypeSearch,
+        drawerConfigTypeMenu,
+        () => drawerConfigTypeOptions,
+        'key',
+        function(pick) {
+            configTypeSelect.value = pick.key;
+            drawerConfigTypeSearch.value = pick.label;
+            configTypeSelect.dispatchEvent(new Event('change'));
+        },
+        function() {
+            configTypeSelect.value = 'preset';
+            drawerConfigTypeSearch.value = 'Preset Config';
+            configTypeSelect.dispatchEvent(new Event('change'));
+        }
+    );
+
+    bindSearchableFilter(
+        drawerCustomerSearch,
+        drawerCustomerMenu,
+        () => drawerCustomerOptions,
+        'key',
+        function(pick) {
+            drawerCustomerInput.value = pick.key;
+            drawerCustomerSearch.value = pick.label;
+            drawerCustomerSearch.classList.remove('is-invalid');
+        },
+        function() {
+            drawerCustomerInput.value = '';
+        }
+    );
+
+    bindSearchableFilter(
+        drawerPresetSearch,
+        drawerPresetMenu,
+        () => drawerPresetOptions,
+        'key',
+        function(pick) {
+            presetSelect.value = pick.key;
+            drawerPresetSearch.value = pick.label;
+            drawerPresetSearch.classList.remove('is-invalid');
+            if (configTypeSelect.value === 'preset') {
+                const preset = presetsCache.find(p => String(p.id) === String(pick.key));
+                if (preset) setConfigFields(preset.config, true);
+            }
+        },
+        function() {
+            presetSelect.value = '';
+        }
+    );
 
     function loadMatrix() {
         let url = `${API}?limit=${LIMIT}&offset=${currentOffset}`;
-        const custId = filterCustomer.value;
-        if (custId) url += `&customer_id=${encodeURIComponent(custId)}`;
+        const configType = filterConfigType.value;
+        if (selectedCustomerFilter) url += `&customer_id=${encodeURIComponent(selectedCustomerFilter)}`;
+        if (configType) url += `&config_type=${encodeURIComponent(configType)}`;
+        if (selectedConfigFilter) {
+            const [kind, id] = selectedConfigFilter.split(':');
+            if (kind === 'preset' && id) url += `&preset_config_id=${encodeURIComponent(id)}`;
+            if (kind === 'custom' && id) url += `&custom_config_id=${encodeURIComponent(id)}`;
+        }
 
         fetch(url)
             .then(r => r.json())
             .then(data => {
+                syncCustomConfigOptions(data.config_matrix);
+                populateConfigFilterOptions();
                 summary.textContent = `${data.total} assignment${data.total !== 1 ? 's' : ''}`;
                 renderTable(data.config_matrix);
                 renderPagination(data.total);
@@ -266,22 +637,31 @@
         }
 
         tbody.innerHTML = rows.map(m => {
-            const configType = m.preset_config_id ? 'Preset' : 'Custom';
             const configName = m.preset_config_name || `Custom #${m.custom_config_id}`;
             const badge = m.preset_config_id
                 ? '<span class="badge bg-blue-lt">Preset</span>'
                 : '<span class="badge bg-purple-lt">Custom</span>';
+            const configDisplay = m.preset_config_id
+                ? `<a class="config-link-btn" href="/preset-configs/${m.preset_config_id}">
+                        <i class="fa fa-sliders"></i>${esc(configName)}
+                   </a>`
+                : `<span class="config-chip">
+                        <i class="fa fa-sliders"></i>${esc(configName)}
+                   </span>`;
 
             return `
             <tr>
                 <td>
-                    <div class="fw-semibold">${esc(m.customer_name || m.customer_id)}</div>
-                    <div class="text-muted small">${esc(m.customer_id)}</div>
+                    <a class="customer-link-btn" href="/customers/${encodeURIComponent(m.customer_id)}">
+                        <i class="fa fa-user"></i>
+                        ${esc(m.customer_name || m.customer_id)}
+                    </a>
+                    <div class="text-meta">${esc(m.customer_id)}</div>
                 </td>
                 <td>${badge}</td>
-                <td>${esc(configName)}</td>
+                <td>${configDisplay}</td>
                 <td>${formatDate(m.effective_from)}</td>
-                <td class="text-muted">${formatDate(m.created_at)}</td>
+                <td class="text-meta">${formatDate(m.created_at)}</td>
                 <td>
                     <div class="dropdown">
                         <button class="btn btn-ghost-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
@@ -321,17 +701,25 @@
         loadMatrix();
     };
 
-    filterCustomer.addEventListener('change', function() {
-        currentOffset = 0;
-        loadMatrix();
+    filterConfigType.addEventListener('change', function() {
+        if (filterConfigType.value && selectedConfigFilter && !selectedConfigFilter.startsWith(filterConfigType.value + ':')) {
+            selectedConfigFilter = '';
+        }
+        const selectedType = headerConfigTypeOptions.find(o => o.key === filterConfigType.value);
+        filterConfigTypeSearch.value = selectedType ? selectedType.label : 'All Config Types';
+        populateConfigFilterOptions();
+        applyTableFilters();
     });
 
     window.openCreate = function() {
         document.getElementById('drawer-title').textContent = 'Assign Config';
         document.getElementById('edit-id').value = '';
-        document.getElementById('input-customer').value = '';
+        drawerCustomerInput.value = '';
+        drawerCustomerSearch.value = '';
         document.getElementById('input-config-type').value = 'preset';
+        syncDrawerSelectionInput('configType');
         presetSelect.value = '';
+        drawerPresetSearch.value = '';
         document.getElementById('input-effective-from').value = new Date().toISOString().split('T')[0];
         document.getElementById('customer-field').style.display = '';
         document.getElementById('drawer-error').classList.add('d-none');
@@ -346,17 +734,21 @@
             .then(data => {
                 document.getElementById('drawer-title').textContent = 'Edit Assignment';
                 document.getElementById('edit-id').value = data.id;
-                document.getElementById('input-customer').value = data.customer_id;
+                drawerCustomerInput.value = data.customer_id;
                 document.getElementById('input-effective-from').value = data.effective_from;
                 document.getElementById('customer-field').style.display = '';
 
                 if (data.preset_config_id) {
                     document.getElementById('input-config-type').value = 'preset';
                     presetSelect.value = data.preset_config_id;
+                    syncDrawerSelectionInput('preset');
                 } else {
                     document.getElementById('input-config-type').value = 'custom';
                     presetSelect.value = '';
+                    drawerPresetSearch.value = '';
                 }
+                syncDrawerSelectionInput('configType');
+                syncDrawerSelectionInput('customer');
 
                 if (data.config) {
                     setConfigFields(data.config, !!data.preset_config_id);
@@ -379,8 +771,17 @@
         const configType = document.getElementById('input-config-type').value;
         const effectiveFrom = document.getElementById('input-effective-from').value;
         const errorEl = document.getElementById('drawer-error');
+        const customerField = drawerCustomerSearch;
+        const presetFieldEl = drawerPresetSearch;
+        const effectiveField = document.getElementById('input-effective-from');
+
+        customerField.classList.remove('is-invalid');
+        presetFieldEl.classList.remove('is-invalid');
+        effectiveField.classList.remove('is-invalid');
 
         if (!customerId || !effectiveFrom) {
+            if (!customerId) customerField.classList.add('is-invalid');
+            if (!effectiveFrom) effectiveField.classList.add('is-invalid');
             errorEl.textContent = 'Customer and effective date are required';
             errorEl.classList.remove('d-none');
             return;
@@ -391,6 +792,7 @@
         if (configType === 'preset') {
             const presetId = presetSelect.value;
             if (!presetId) {
+                presetFieldEl.classList.add('is-invalid');
                 errorEl.textContent = 'Select a preset config';
                 errorEl.classList.remove('d-none');
                 return;
@@ -433,7 +835,22 @@
             .catch(err => alert(err.message));
     };
 
+    drawerCustomerSearch.addEventListener('input', function() { this.classList.remove('is-invalid'); });
+    drawerPresetSearch.addEventListener('input', function() { this.classList.remove('is-invalid'); });
+    drawerConfigTypeSearch.addEventListener('input', function() {
+        if (!this.value.trim()) {
+            configTypeSelect.value = 'preset';
+            syncDrawerSelectionInput('configType');
+            updateConfigTypeUI();
+        }
+    });
+    document.getElementById('input-effective-from').addEventListener('input', function() {
+        this.classList.remove('is-invalid');
+    });
+
     loadLookups();
+    filterConfigTypeSearch.value = 'All Config Types';
+    syncDrawerSelectionInput('configType');
     loadMatrix();
 })();
 </script>

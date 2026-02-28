@@ -14,7 +14,7 @@ A flexible, API-first admin panel built with FastAPI and SQLAlchemy ORM. Connect
 
 | Backend    | `DATABASE_URL` format                                  | Extra install            |
 |------------|--------------------------------------------------------|--------------------------|
-| SQLite     | `sqlite:///./admin.db`                                 | None (built-in)          |
+| SQLite     | `sqlite:///./sqlite.db`                                | None (built-in)          |
 | MySQL      | `mysql+pymysql://user:pass@host:3306/db`               | `uv pip install pymysql` |
 | PostgreSQL | `postgresql://user:pass@host:5432/db`                  | `uv pip install psycopg2-binary` |
 
@@ -224,7 +224,7 @@ statics/
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DATABASE_URL` | `sqlite:///./admin.db` | Database connection string |
+| `DATABASE_URL` | `sqlite:///./sqlite.db` | Database connection string |
 | `DEBUG` | `false` | Enable debug mode |
 | `SECRET_KEY` | `changeme` | Secret key for sessions |
 | `PRIMARY_COLOR` | `#0054a6` | UI primary color |

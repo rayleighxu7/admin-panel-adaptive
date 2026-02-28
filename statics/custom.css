@@ -1,6 +1,7 @@
 /* Sidebar branding */
 .navbar-vertical {
     background-color: var(--brand-sidebar-bg) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .navbar-vertical .navbar-nav .nav-link {
@@ -18,14 +19,48 @@
     color: var(--brand-sidebar-text) !important;
 }
 
+.sidebar-brand-text {
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+}
+
+/* Global shape system for cleaner rounded UI */
+:root {
+    --shape-sm: 0.45rem;
+    --shape-md: 0.62rem;
+    --shape-lg: 0.8rem;
+}
+
 /* Primary button branding */
 .btn-primary {
     background-color: var(--brand-primary) !important;
     border-color: var(--brand-primary) !important;
 }
 
-.btn-primary:hover {
-    filter: brightness(0.9);
+/* Unified button interaction */
+.btn,
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+    cursor: pointer;
+    border-radius: var(--shape-md);
+}
+
+.btn {
+    border-radius: var(--shape-md);
+}
+
+.btn-sm {
+    border-radius: var(--shape-sm);
+}
+
+.btn:hover:not(:disabled):not(.disabled),
+button:hover:not(:disabled):not(.disabled),
+input[type="button"]:hover:not(:disabled),
+input[type="submit"]:hover:not(:disabled),
+input[type="reset"]:hover:not(:disabled) {
+    filter: grayscale(0.75) brightness(0.95);
 }
 
 .btn-success {
@@ -55,6 +90,18 @@ a:hover {
     box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb), 0.15);
 }
 
+.form-control,
+.form-select,
+.input-group-text {
+    border-radius: var(--shape-md);
+}
+
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: var(--brand-danger);
+    box-shadow: 0 0 0 0.18rem rgba(220, 53, 69, 0.16);
+}
+
 /* Active nav indicator */
 .navbar-vertical .nav-link.active {
     border-left: 3px solid var(--brand-primary);
@@ -71,4 +118,359 @@ a:hover {
 
 .navbar-vertical .dropdown-menu .dropdown-item.active .fa {
     color: #fff !important;
+}
+
+/* Modern minimalist app surface */
+body {
+    background-color: #f6f8fb;
+}
+
+.page-wrapper .container-fluid {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+}
+
+.page-header {
+    padding-top: 1.15rem;
+    padding-bottom: 0.35rem;
+}
+
+.page-title {
+    letter-spacing: -0.01em;
+}
+
+.card {
+    border-color: #e7ebf1;
+    border-radius: var(--shape-lg);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.card-header {
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+    border-bottom-color: #edf1f6;
+}
+
+.card-footer {
+    border-top-color: #edf1f6;
+}
+
+.table-modern thead th {
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #5f6b7a;
+    background: #fafbfd;
+    border-bottom-color: #e9eef5;
+}
+
+.table-modern td {
+    vertical-align: middle;
+}
+
+.table-modern tbody tr:hover {
+    background-color: #fafcff;
+}
+
+.text-meta {
+    color: #7a8596;
+    font-size: 0.8125rem;
+}
+
+.drawer-md {
+    width: 420px !important;
+}
+
+.drawer-lg {
+    width: 480px !important;
+}
+
+.filter-control {
+    max-width: 300px;
+}
+
+/* Keep list filters/actions in one line, scale by viewport */
+.list-header-row {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    overflow-x: auto;
+}
+
+.list-toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.list-toolbar .input-icon {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.list-toolbar .input-icon .form-control {
+    width: 100%;
+    font-size: clamp(0.73rem, 0.45vw + 0.56rem, 0.875rem);
+}
+
+.list-toolbar .form-select,
+.list-toolbar .form-control,
+.list-toolbar .filter-control {
+    flex: 1 1 0;
+    min-width: 0;
+    width: clamp(110px, 12vw, 220px);
+    max-width: none;
+    font-size: clamp(0.73rem, 0.45vw + 0.56rem, 0.875rem);
+}
+
+.searchable-filter {
+    position: relative;
+    z-index: 2;
+    isolation: isolate;
+}
+
+.searchable-filter .form-control {
+    background-color: #fff;
+}
+
+.searchable-filter-menu {
+    position: absolute;
+    top: calc(100% + 0.3rem);
+    left: 0;
+    right: 0;
+    z-index: 2200;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #d6deea;
+    border-radius: var(--shape-md);
+    box-shadow: 0 12px 24px rgba(16, 24, 40, 0.12);
+}
+
+.offcanvas .searchable-filter-menu {
+    z-index: 2600;
+}
+
+.searchable-filter.is-open {
+    z-index: 2600;
+}
+
+.offcanvas .searchable-filter.is-open {
+    z-index: 3200;
+}
+
+/* Ensure config-matrix filter menus render above table */
+.matrix-card {
+    overflow: visible;
+}
+
+.matrix-card .card-header {
+    position: relative;
+    z-index: 10;
+    overflow: visible;
+}
+
+.matrix-card .table-responsive {
+    position: relative;
+    z-index: 1;
+}
+
+/* Config matrix: make filters fill header width cleanly */
+.matrix-card .list-header-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.5rem;
+}
+
+.matrix-card .list-toolbar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+}
+
+.matrix-card .list-toolbar .filter-control {
+    width: 100% !important;
+    max-width: none;
+    min-width: 0;
+}
+
+.matrix-card .list-toolbar .searchable-filter .form-control,
+.matrix-card .list-toolbar .form-select {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0;
+}
+
+.searchable-filter-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 0;
+    border-bottom: 1px solid #eef2f8;
+    background: #fff;
+    text-align: left;
+}
+
+.searchable-filter-option:last-child {
+    border-bottom: 0;
+}
+
+.searchable-filter-option:hover {
+    background: #f7faff;
+}
+
+.searchable-filter-option-main {
+    color: #101828;
+    font-size: 0.86rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.searchable-filter-option-sub {
+    color: #667085;
+    font-size: 0.74rem;
+    line-height: 1.2;
+    margin-top: 0.1rem;
+}
+
+.searchable-filter-empty {
+    padding: 0.5rem 0.6rem;
+    color: #667085;
+    font-size: 0.78rem;
+}
+
+.list-toolbar-actions {
+    flex-shrink: 0;
+}
+
+.list-toolbar-actions .btn {
+    font-size: clamp(0.74rem, 0.4vw + 0.58rem, 0.9rem);
+    white-space: nowrap;
+    padding: clamp(0.3rem, 0.35vw + 0.2rem, 0.48rem) clamp(0.55rem, 0.8vw + 0.25rem, 0.95rem);
+}
+
+.dropdown-menu {
+    border-radius: var(--shape-md);
+    border-color: #e3e8f1;
+    box-shadow: 0 10px 20px rgba(16, 24, 40, 0.08);
+}
+
+.dropdown-item {
+    border-radius: var(--shape-sm);
+}
+
+.badge {
+    border-radius: 999px;
+}
+
+table.table-modern {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+table.table-modern thead tr th:first-child {
+    border-top-left-radius: var(--shape-md);
+}
+
+table.table-modern thead tr th:last-child {
+    border-top-right-radius: var(--shape-md);
+}
+
+.form-section-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #667085;
+    margin-bottom: 0.75rem;
+}
+
+.clickable-row {
+    cursor: pointer;
+}
+
+.clickable-row:hover {
+    background-color: #f3f6fb;
+}
+
+.note-text {
+    white-space: pre-wrap;
+}
+
+/* Config matrix customer column link button */
+.customer-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.62rem;
+    border: 1px solid #dbe3ee;
+    border-radius: 0.62rem;
+    background: #ffffff;
+    color: #1f2937 !important;
+    text-decoration: none !important;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.2;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.customer-link-btn:hover {
+    border-color: rgba(var(--brand-primary-rgb), 0.38);
+    box-shadow: 0 3px 10px rgba(var(--brand-primary-rgb), 0.12);
+    transform: translateY(-1px);
+}
+
+.customer-link-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb), 0.15);
+}
+
+/* Config matrix config column button/chip */
+.config-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.62rem;
+    border: 1px solid #dbe3ee;
+    border-radius: 0.62rem;
+    background: #ffffff;
+    color: #1f2937 !important;
+    text-decoration: none !important;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.2;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.config-link-btn:hover {
+    border-color: rgba(var(--brand-primary-rgb), 0.38);
+    box-shadow: 0 3px 10px rgba(var(--brand-primary-rgb), 0.12);
+    transform: translateY(-1px);
+}
+
+.config-link-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(var(--brand-primary-rgb), 0.15);
+}
+
+.config-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.62rem;
+    border: 1px solid #e6eaf1;
+    border-radius: 0.62rem;
+    background: #f8fafc;
+    color: #4b5565;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.2;
 }

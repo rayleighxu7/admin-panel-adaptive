@@ -8,7 +8,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    DATABASE_URL: str = "sqlite:///./admin.db"
+    DATABASE_URL: str = "sqlite:///./sqlite.db"
     DEBUG: bool = True
 
     BRAND_PRIMARY: str = "#206bc4"

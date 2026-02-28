@@ -18,16 +18,6 @@
 {% endblock %}
 
 {% block content %}
-<style>
-    .preset-clickable-row {
-        cursor: pointer;
-    }
-
-    .preset-clickable-row:hover {
-        background-color: #f1f3f5;
-    }
-</style>
-
 <div class="col-12">
     <div class="row">
         <div class="col-lg-4">
@@ -137,7 +127,7 @@
                     data.notes.map(n => `
                         <div class="list-group-item">
                             <div class="d-flex w-100 justify-content-between">
-                                <div style="white-space: pre-wrap;">${esc(n.note)}</div>
+                                <div class="note-text">${esc(n.note)}</div>
                                 <div class="ms-3 d-flex gap-1 flex-shrink-0">
                                     <button class="btn btn-ghost-secondary btn-sm" onclick="openEditNote(${n.id}, '${esc(n.note).replace(/'/g, "\\'")}')">
                                         <i class="fa fa-pen"></i>
@@ -164,7 +154,7 @@
                     return;
                 }
                 container.innerHTML = `
-                    <table class="table table-vcenter card-table mb-0">
+                    <table class="table table-vcenter card-table table-modern mb-0">
                         <thead>
                             <tr><th>Type</th><th>Config</th><th>Effective From</th></tr>
                         </thead>
@@ -175,7 +165,7 @@
                                     : '<span class="badge bg-purple-lt">Custom</span>';
                                 const name = m.preset_config_name || 'Custom #' + m.custom_config_id;
                                 const rowAttrs = m.preset_config_id
-                                    ? `class="preset-clickable-row" onclick="window.location.href='/preset-configs/${m.preset_config_id}'"`
+                                    ? `class="clickable-row" onclick="window.location.href='/preset-configs/${m.preset_config_id}'"`
                                     : '';
                                 return `<tr ${rowAttrs}>
                                     <td>${badge}</td>
