@@ -133,6 +133,134 @@
     })();
     </script>
     <script>
+    window.AdminSearchableFilter = (function() {
+        function filteredOptions(options, query) {
+            var q = String(query || "").trim().toLowerCase();
+            if (!q) return options;
+            return options.filter(function(o) {
+                return (
+                    String(o.label).toLowerCase().includes(q) ||
+                    String(o.subtext || "").toLowerCase().includes(q)
+                );
+            });
+        }
+
+        function renderSearchableMenu(menuEl, options, keyName, escFn) {
+            if (!options.length) {
+                menuEl.innerHTML = '<div class="searchable-filter-empty">No matches</div>';
+                menuEl.dataset.options = "[]";
+                return;
+            }
+
+            var safeEsc = escFn || function(v) { return String(v ?? ""); };
+            menuEl.dataset.options = JSON.stringify(
+                options.map(function(o) {
+                    return { key: o[keyName], label: o.label, subtext: o.subtext || "" };
+                })
+            );
+            menuEl.innerHTML = options
+                .map(function(o, idx) {
+                    return (
+                        '<button type="button" class="searchable-filter-option" data-index="' + idx + '">' +
+                            '<span class="searchable-filter-option-main">' + safeEsc(o.label) + '</span>' +
+                            (o.subtext ? ('<span class="searchable-filter-option-sub">' + safeEsc(o.subtext) + '</span>') : "") +
+                        "</button>"
+                    );
+                })
+                .join("");
+        }
+
+        function bindSearchableFilter(inputEl, menuEl, getOptions, keyName, onPick, onClear, escFn, behavior) {
+            var wrapperEl = inputEl.closest(".searchable-filter");
+            var opts = behavior || {};
+
+            function closeAllSearchableMenus() {
+                document.querySelectorAll(".searchable-filter-menu").forEach(function(menu) {
+                    if (menu !== menuEl) menu.classList.add("d-none");
+                });
+                document.querySelectorAll(".searchable-filter.is-open").forEach(function(el) {
+                    if (el !== wrapperEl) el.classList.remove("is-open");
+                });
+            }
+
+            function openMenu() {
+                closeAllSearchableMenus();
+                menuEl.classList.remove("d-none");
+                if (wrapperEl) wrapperEl.classList.add("is-open");
+            }
+
+            function closeMenu() {
+                menuEl.classList.add("d-none");
+                if (wrapperEl) wrapperEl.classList.remove("is-open");
+            }
+
+            function refreshMenu(forceAll) {
+                var query = forceAll ? "" : inputEl.value;
+                var options = filteredOptions(getOptions(), query);
+                renderSearchableMenu(menuEl, options, keyName, escFn);
+                openMenu();
+                return options;
+            }
+
+            inputEl.addEventListener("focus", function() {
+                refreshMenu(true);
+            });
+            inputEl.addEventListener("click", function() {
+                refreshMenu(true);
+            });
+            inputEl.addEventListener("input", function() {
+                if (!inputEl.value.trim()) {
+                    onClear();
+                    if (typeof opts.onEmptyInput === "function") opts.onEmptyInput();
+                }
+                refreshMenu(false);
+            });
+            inputEl.addEventListener("keydown", function(event) {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    var options = filteredOptions(getOptions(), inputEl.value);
+                    if (options.length > 0) {
+                        var first = options[0];
+                        onPick({
+                            key: first[keyName],
+                            label: first.label,
+                            subtext: first.subtext || ""
+                        });
+                    } else {
+                        onClear();
+                        inputEl.value = "";
+                        if (typeof opts.onNoMatchEnter === "function") opts.onNoMatchEnter();
+                    }
+                    closeMenu();
+                } else if (event.key === "Escape") {
+                    closeMenu();
+                }
+            });
+            inputEl.addEventListener("blur", function() {
+                setTimeout(closeMenu, 120);
+            });
+            menuEl.addEventListener("mousedown", function(event) {
+                event.preventDefault();
+            });
+            menuEl.addEventListener("click", function(event) {
+                var button = event.target.closest(".searchable-filter-option");
+                if (!button) return;
+                var options = JSON.parse(menuEl.dataset.options || "[]");
+                var pick = options[Number(button.dataset.index)];
+                if (!pick) return;
+                onPick(pick);
+                closeMenu();
+            });
+        }
+
+        return {
+            filteredOptions: filteredOptions,
+            renderSearchableMenu: renderSearchableMenu,
+            bindSearchableFilter: bindSearchableFilter
+        };
+    })();
+    </script>
+    <script>
     window.AdminDatePicker = (function() {
         var EN_LOCALE = {
             days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],

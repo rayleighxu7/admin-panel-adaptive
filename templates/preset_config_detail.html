@@ -163,106 +163,23 @@
     }
 
     function filteredOptions(options, query) {
-        const q = query.trim().toLowerCase();
-        if (!q) return options;
-        return options.filter(o =>
-            String(o.label).toLowerCase().includes(q) ||
-            String(o.subtext || '').toLowerCase().includes(q)
-        );
+        return window.AdminSearchableFilter.filteredOptions(options, query);
     }
 
     function renderSearchableMenu(menuEl, options, keyName) {
-        if (!options.length) {
-            menuEl.innerHTML = '<div class="searchable-filter-empty">No matches</div>';
-            menuEl.dataset.options = '[]';
-            return;
-        }
-
-        menuEl.dataset.options = JSON.stringify(options.map(o => ({ key: o[keyName], label: o.label, subtext: o.subtext || '' })));
-        menuEl.innerHTML = options.map((o, idx) => `
-            <button type="button" class="searchable-filter-option" data-index="${idx}">
-                <span class="searchable-filter-option-main">${esc(o.label)}</span>
-                ${o.subtext ? `<span class="searchable-filter-option-sub">${esc(o.subtext)}</span>` : ''}
-            </button>
-        `).join('');
+        return window.AdminSearchableFilter.renderSearchableMenu(menuEl, options, keyName, esc);
     }
 
     function bindSearchableFilter(inputEl, menuEl, getOptions, keyName, onPick, onClear) {
-        const wrapperEl = inputEl.closest('.searchable-filter');
-
-        function closeAllSearchableMenus() {
-            document.querySelectorAll('.searchable-filter-menu').forEach(function(menu) {
-                if (menu !== menuEl) menu.classList.add('d-none');
-            });
-            document.querySelectorAll('.searchable-filter.is-open').forEach(function(el) {
-                if (el !== wrapperEl) el.classList.remove('is-open');
-            });
-        }
-
-        function openMenu() {
-            closeAllSearchableMenus();
-            menuEl.classList.remove('d-none');
-            if (wrapperEl) wrapperEl.classList.add('is-open');
-        }
-
-        function closeMenu() {
-            menuEl.classList.add('d-none');
-            if (wrapperEl) wrapperEl.classList.remove('is-open');
-        }
-
-        function refreshMenu(forceAll = false) {
-            const query = forceAll ? '' : inputEl.value;
-            const options = filteredOptions(getOptions(), query);
-            renderSearchableMenu(menuEl, options, keyName);
-            openMenu();
-            return options;
-        }
-
-        inputEl.addEventListener('focus', function() {
-            refreshMenu(true);
-        });
-        inputEl.addEventListener('click', function() {
-            refreshMenu(true);
-        });
-        inputEl.addEventListener('input', function() {
-            if (!inputEl.value.trim()) onClear();
-            refreshMenu();
-        });
-        inputEl.addEventListener('keydown', function(event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                const options = filteredOptions(getOptions(), inputEl.value);
-                if (options.length > 0) {
-                    const first = options[0];
-                    onPick({
-                        key: first[keyName],
-                        label: first.label,
-                        subtext: first.subtext || '',
-                    });
-                } else {
-                    onClear();
-                    inputEl.value = '';
-                }
-                closeMenu();
-            } else if (event.key === 'Escape') {
-                closeMenu();
-            }
-        });
-        inputEl.addEventListener('blur', function() {
-            setTimeout(closeMenu, 120);
-        });
-        menuEl.addEventListener('mousedown', function(event) {
-            event.preventDefault();
-        });
-        menuEl.addEventListener('click', function(event) {
-            const button = event.target.closest('.searchable-filter-option');
-            if (!button) return;
-            const options = JSON.parse(menuEl.dataset.options || '[]');
-            const pick = options[Number(button.dataset.index)];
-            if (!pick) return;
-            onPick(pick);
-            closeMenu();
-        });
+        return window.AdminSearchableFilter.bindSearchableFilter(
+            inputEl,
+            menuEl,
+            getOptions,
+            keyName,
+            onPick,
+            onClear,
+            esc
+        );
     }
 
     function loadCustomerLookup() {
