@@ -9,7 +9,13 @@ class Settings(BaseSettings):
     )
 
     DATABASE_URL: str = "sqlite:///./sqlite.db"
-    DEBUG: bool = True
+    DEBUG: bool = False
+    ENABLE_AUTH: bool = True
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str = "change-me-now"
+    ENABLE_SCHEMA_BROWSER: bool = True
+    ENABLE_SCHEMA_SAMPLE_ROWS: bool = True
+    SCHEMA_SAMPLE_LIMIT: int = 10
 
     BRAND_PRIMARY: str = "#206bc4"
     BRAND_SIDEBAR_BG: str = "#1b2434"

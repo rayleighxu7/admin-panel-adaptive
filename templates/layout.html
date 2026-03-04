@@ -6,6 +6,7 @@
     <title>{% block title %}Admin Panel{% endblock %}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/air-datepicker@3.5.3/air-datepicker.min.css">
     <link rel="stylesheet" href="/brand.css">
     <link rel="stylesheet" href="/static/custom.css">
     {% block head_css %}{% endblock %}
@@ -83,6 +84,7 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/air-datepicker@3.5.3/air-datepicker.min.js"></script>
     <script>
     (function() {
         document.querySelectorAll('#sidebar-menu .dropdown-menu[id]').forEach(function(menu) {
@@ -128,6 +130,54 @@
                 if (toggle) toggle.setAttribute('aria-expanded', 'true');
             }
         }
+    })();
+    </script>
+    <script>
+    window.AdminDatePicker = (function() {
+        var EN_LOCALE = {
+            days: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+            daysShort: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+            daysMin: ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'],
+            months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+            monthsShort: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            today: 'Today',
+            clear: 'Clear',
+            dateFormat: 'yyyy-MM-dd',
+            timeFormat: 'hh:mm aa',
+            firstDay: 0
+        };
+
+        function init(root) {
+            if (typeof AirDatepicker === 'undefined') return;
+            var scope = root || document;
+            var inputs = scope.querySelectorAll('input[type="date"], input[data-date-picker="true"]');
+            inputs.forEach(function(input) {
+                if (input.dataset.fpBound === '1') return;
+                var initialValue = input.value || null;
+                input.type = 'text';
+                input.placeholder = input.placeholder || 'YYYY-MM-DD';
+                var picker = new AirDatepicker(input, {
+                    autoClose: true,
+                    locale: EN_LOCALE,
+                    dateFormat: 'yyyy-MM-dd',
+                    isMobile: false,
+                    selectedDates: initialValue ? [initialValue] : [],
+                    onSelect: function(args) {
+                        input.value = args.formattedDate || '';
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+                input._adminDatePicker = picker;
+                input.dataset.fpBound = '1';
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            init(document);
+        });
+
+        return { init: init };
     })();
     </script>
     {% block script %}{% endblock %}

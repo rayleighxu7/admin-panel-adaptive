@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -21,11 +22,11 @@ class NoteOut(BaseModel):
 
 
 class NoteCreate(BaseModel):
-    note: str
+    note: Annotated[str, Field(min_length=1, max_length=5000)]
 
 
 class NoteUpdate(BaseModel):
-    note: str
+    note: Annotated[str, Field(min_length=1, max_length=5000)]
 
 
 class NoteListResponse(BaseModel):

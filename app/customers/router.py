@@ -1,10 +1,12 @@
 from datetime import date, datetime
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -41,20 +43,19 @@ class CustomerOut(BaseModel):
 
 
 class CustomerCreate(BaseModel):
-    id: str | None = None
-    name: str
+    id: Annotated[str, Field(min_length=1, max_length=36)] | None = None
+    name: Annotated[str, Field(min_length=1, max_length=100)]
     email: EmailStr
-    phone: str | None = None
-    address: str | None = None
+    phone: Annotated[str, Field(max_length=30)] | None = None
+    address: Annotated[str, Field(max_length=1000)] | None = None
     date_of_birth: date | None = None
 
 
 class CustomerUpdate(BaseModel):
-    id: str | None = None
-    name: str | None = None
+    name: Annotated[str, Field(min_length=1, max_length=100)] | None = None
     email: EmailStr | None = None
-    phone: str | None = None
-    address: str | None = None
+    phone: Annotated[str, Field(max_length=30)] | None = None
+    address: Annotated[str, Field(max_length=1000)] | None = None
     date_of_birth: date | None = None
 
 
@@ -113,8 +114,12 @@ async def create_customer(body: CustomerCreate, db: Session = Depends(get_db)):
         kwargs["date_of_birth"] = body.date_of_birth
     customer = Customer(**kwargs)
     db.add(customer)
-    db.commit()
-    db.refresh(customer)
+    try:
+        db.commit()
+        db.refresh(customer)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Customer id or email already exists")
     return CustomerOut.model_validate(customer)
 
 
@@ -132,11 +137,18 @@ async def update_customer(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
+    if "id" in updates:
+        raise HTTPException(status_code=400, detail="Customer ID cannot be changed")
+
     for field, value in updates.items():
         setattr(customer, field, value)
 
-    db.commit()
-    db.refresh(customer)
+    try:
+        db.commit()
+        db.refresh(customer)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Customer email already exists")
     return CustomerOut.model_validate(customer)
 
 

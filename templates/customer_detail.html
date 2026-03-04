@@ -22,7 +22,14 @@
     <div class="row">
         <div class="col-lg-4">
             <div class="card mb-4">
-                <div class="card-header"><h3 class="card-title">Details</h3></div>
+                <div class="card-header">
+                    <h3 class="card-title">Details</h3>
+                    <div class="card-actions">
+                        <button class="btn btn-sm btn-primary" id="details-edit-btn" onclick="openEditCustomer()">
+                            <i class="fa fa-pen me-1"></i>Edit
+                        </button>
+                    </div>
+                </div>
                 <div class="card-body" id="detail-body">
                     <div class="text-center text-muted py-3">
                         <i class="fa fa-spinner fa-spin"></i> Loading&hellip;
@@ -47,7 +54,14 @@
                 </div>
             </div>
             <div class="card mb-4">
-                <div class="card-header"><h3 class="card-title">Config Assignments</h3></div>
+                <div class="card-header">
+                    <h3 class="card-title">Config Assignments</h3>
+                    <div class="card-actions">
+                        <button class="btn btn-primary btn-sm" onclick="openAssignConfig()">
+                            <i class="fa fa-plus me-1"></i>Assign Config
+                        </button>
+                    </div>
+                </div>
                 <div class="table-responsive" id="configs-body">
                     <div class="text-center text-muted py-4">
                         <i class="fa fa-spinner fa-spin"></i> Loading&hellip;
@@ -76,6 +90,94 @@
         </div>
     </div>
 </div>
+
+<div class="offcanvas offcanvas-end drawer-lg" tabindex="-1" id="assign-config-drawer">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title">Assign Config</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div id="assign-config-error" class="alert alert-danger d-none"></div>
+        <div class="mb-3">
+            <label class="form-label">Customer</label>
+            <div class="searchable-filter">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="input-customer-search"
+                    disabled
+                >
+            </div>
+            <input type="hidden" id="input-customer">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Config Type</label>
+            <div class="searchable-filter">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="input-config-type-search"
+                    placeholder="Select config type"
+                    autocomplete="off"
+                >
+                <div class="searchable-filter-menu d-none" id="input-config-type-menu"></div>
+            </div>
+            <input type="hidden" id="input-config-type" value="preset">
+        </div>
+        <div class="mb-3" id="assign-preset-field">
+            <label class="form-label">Preset</label>
+            <div class="searchable-filter">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="input-preset-search"
+                    placeholder="Select preset (type to search)"
+                    autocomplete="off"
+                >
+                <div class="searchable-filter-menu d-none" id="input-preset-menu"></div>
+            </div>
+            <input type="hidden" id="input-preset">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Effective From</label>
+            <input type="date" class="form-control" id="assign-effective-from">
+        </div>
+        <hr class="my-3">
+        <div class="form-section-title">Config Values</div>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label">Commission %</label>
+                <input type="number" step="0.01" class="form-control" id="assign-commission" value="0">
+            </div>
+            <div class="col-6">
+                <label class="form-label">Affiliate %</label>
+                <input type="number" step="0.01" class="form-control" id="assign-affiliate" value="0">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">GMV %</label>
+            <input type="number" step="0.01" class="form-control" id="assign-gmv" value="0">
+        </div>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label">Per Order Fee ($)</label>
+                <input type="number" step="0.01" class="form-control" id="assign-per-order-fee" value="0">
+            </div>
+            <div class="col-6">
+                <label class="form-label">Qty Threshold</label>
+                <input type="number" class="form-control" id="assign-per-order-threshold" value="0">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Flat Fee ($)</label>
+            <input type="number" step="0.01" class="form-control" id="assign-flat-fee" value="0">
+        </div>
+    </div>
+    <div class="offcanvas-footer p-3 border-top d-flex">
+        <button type="button" class="btn me-auto" data-bs-dismiss="offcanvas">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveConfigAssignment()">Save</button>
+    </div>
+</div>
 {% endblock %}
 
 {% block script %}
@@ -83,6 +185,30 @@
 (function() {
     const CUSTOMER_ID = '{{ customer_id }}';
     const API = `/api/customers/${CUSTOMER_ID}`;
+    const MATRIX_API = '/api/config-matrix';
+    const configTypeSelect = document.getElementById('input-config-type');
+    const drawerConfigTypeSearch = document.getElementById('input-config-type-search');
+    const drawerConfigTypeMenu = document.getElementById('input-config-type-menu');
+    const drawerPresetSearch = document.getElementById('input-preset-search');
+    const drawerPresetMenu = document.getElementById('input-preset-menu');
+    const presetSelect = document.getElementById('input-preset');
+    const drawerCustomerSearch = document.getElementById('input-customer-search');
+    const drawerCustomerInput = document.getElementById('input-customer');
+    let customerData = null;
+    let presetsCache = [];
+    let drawerPresetOptions = [];
+    const assignConfigFieldIds = [
+        'assign-commission',
+        'assign-affiliate',
+        'assign-gmv',
+        'assign-per-order-fee',
+        'assign-per-order-threshold',
+        'assign-flat-fee',
+    ];
+    const drawerConfigTypeOptions = [
+        { key: 'preset', label: 'Preset Config', subtext: '' },
+        { key: 'custom', label: 'Custom Config', subtext: '' },
+    ];
 
     function esc(str) {
         const d = document.createElement('div');
@@ -91,26 +217,85 @@
     }
 
     function formatDate(iso) {
-        if (!iso) return '—';
+        if (!iso) return '';
         return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function renderCustomerView(data) {
+        document.getElementById('detail-body').innerHTML = `
+            <div class="mb-3"><h3 class="mb-0">${esc(data.name)}</h3><div class="text-muted small">${esc(data.id)}</div></div>
+            <div class="mb-2"><label class="form-label text-muted mb-0">Email</label><div>${esc(data.email)}</div></div>
+            <div class="mb-2"><label class="form-label text-muted mb-0">Phone</label><div>${data.phone ? esc(data.phone) : ''}</div></div>
+            <div class="mb-2"><label class="form-label text-muted mb-0">Address</label><div>${data.address ? esc(data.address) : ''}</div></div>
+            <div class="mb-2"><label class="form-label text-muted mb-0">Date of Birth</label><div>${formatDate(data.date_of_birth)}</div></div>
+            <div class="mb-2"><label class="form-label text-muted mb-0">Created</label><div>${formatDate(data.created_at)}</div></div>
+            <div><label class="form-label text-muted mb-0">Updated</label><div>${formatDate(data.updated_at)}</div></div>
+        `;
+        document.getElementById('details-edit-btn').classList.remove('d-none');
+    }
+
+    function renderCustomerEdit(data) {
+        document.getElementById('detail-body').innerHTML = `
+            <div id="detail-error" class="alert alert-danger d-none"></div>
+            <div class="mb-3">
+                <label class="form-label">Customer ID</label>
+                <input class="form-control" value="${esc(data.id)}" disabled>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <input class="form-control" id="detail-name" value="${esc(data.name)}">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <input class="form-control" id="detail-email" type="email" value="${esc(data.email)}">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Phone</label>
+                <input class="form-control" id="detail-phone" value="${esc(data.phone || '')}">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Address</label>
+                <textarea class="form-control" id="detail-address" rows="2">${esc(data.address || '')}</textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Date of Birth</label>
+                <input class="form-control" id="detail-dob" type="date" value="${esc(data.date_of_birth || '')}">
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" onclick="saveCustomerDetails()">Save</button>
+                <button class="btn" onclick="cancelEditCustomer()">Cancel</button>
+            </div>
+        `;
+        document.getElementById('details-edit-btn').classList.add('d-none');
+        if (window.AdminDatePicker) {
+            window.AdminDatePicker.init(document.getElementById('detail-body'));
+        }
     }
 
     function loadCustomer() {
         fetch(API)
             .then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); })
             .then(data => {
-                document.getElementById('detail-body').innerHTML = `
-                    <div class="mb-3"><h3 class="mb-0">${esc(data.name)}</h3><div class="text-muted small">${esc(data.id)}</div></div>
-                    <div class="mb-2"><label class="form-label text-muted mb-0">Email</label><div>${esc(data.email)}</div></div>
-                    <div class="mb-2"><label class="form-label text-muted mb-0">Phone</label><div>${data.phone ? esc(data.phone) : '<span class="text-muted">—</span>'}</div></div>
-                    <div class="mb-2"><label class="form-label text-muted mb-0">Address</label><div>${data.address ? esc(data.address) : '<span class="text-muted">—</span>'}</div></div>
-                    <div class="mb-2"><label class="form-label text-muted mb-0">Date of Birth</label><div>${formatDate(data.date_of_birth)}</div></div>
-                    <div class="mb-2"><label class="form-label text-muted mb-0">Created</label><div>${formatDate(data.created_at)}</div></div>
-                    <div><label class="form-label text-muted mb-0">Updated</label><div>${formatDate(data.updated_at)}</div></div>
-                `;
+                customerData = data;
+                renderCustomerView(data);
             })
             .catch(() => {
                 document.getElementById('detail-body').innerHTML = '<div class="text-center text-danger py-3">Customer not found</div>';
+                document.getElementById('details-edit-btn').classList.add('d-none');
+            });
+    }
+
+    function loadPresetConfigs() {
+        fetch('/api/preset-configs?limit=200')
+            .then(r => r.json())
+            .then(data => {
+                presetsCache = data.preset_configs || [];
+                drawerPresetOptions = presetsCache.map(p => ({
+                    key: String(p.id),
+                    label: p.name,
+                    subtext: `Preset #${p.id}`,
+                }));
+                syncDrawerSelectionInput('preset');
             });
     }
 
@@ -219,7 +404,328 @@
             .then(() => loadNotes());
     };
 
+    function toggleAssignConfigType() {
+        const type = configTypeSelect.value;
+        const isPreset = type === 'preset';
+        document.getElementById('assign-preset-field').classList.toggle('d-none', !isPreset);
+        if (isPreset) {
+            const preset = presetsCache.find(p => String(p.id) === String(presetSelect.value));
+            if (preset) {
+                setAssignConfigFields(preset.config, true);
+            } else {
+                clearAssignConfigFields(true);
+            }
+        } else {
+            assignConfigFieldIds.forEach(id => {
+                document.getElementById(id).disabled = false;
+            });
+        }
+    }
+
+    function getCustomConfigFromAssignForm() {
+        return {
+            commission_percentage: (parseFloat(document.getElementById('assign-commission').value) || 0) / 100,
+            affiliate_percentage: (parseFloat(document.getElementById('assign-affiliate').value) || 0) / 100,
+            gmv_percentage: (parseFloat(document.getElementById('assign-gmv').value) || 0) / 100,
+            per_order: {
+                fee_cents: Math.round((parseFloat(document.getElementById('assign-per-order-fee').value) || 0) * 100),
+                quantity_threshold: parseInt(document.getElementById('assign-per-order-threshold').value, 10) || 0,
+            },
+            flat_fee_cents: Math.round((parseFloat(document.getElementById('assign-flat-fee').value) || 0) * 100),
+        };
+    }
+
+    function setAssignConfigFields(config, disabled) {
+        document.getElementById('assign-commission').value = (config.commission_percentage * 100).toFixed(2);
+        document.getElementById('assign-affiliate').value = (config.affiliate_percentage * 100).toFixed(2);
+        document.getElementById('assign-gmv').value = (config.gmv_percentage * 100).toFixed(2);
+        document.getElementById('assign-per-order-fee').value = (config.per_order.fee_cents / 100).toFixed(2);
+        document.getElementById('assign-per-order-threshold').value = config.per_order.quantity_threshold;
+        document.getElementById('assign-flat-fee').value = (config.flat_fee_cents / 100).toFixed(2);
+        assignConfigFieldIds.forEach(id => {
+            document.getElementById(id).disabled = disabled;
+        });
+    }
+
+    function clearAssignConfigFields(disabled) {
+        setAssignConfigFields({
+            commission_percentage: 0,
+            affiliate_percentage: 0,
+            gmv_percentage: 0,
+            per_order: { fee_cents: 0, quantity_threshold: 0 },
+            flat_fee_cents: 0,
+        }, disabled);
+    }
+
+    window.openEditCustomer = function() {
+        if (!customerData) return;
+        renderCustomerEdit(customerData);
+    };
+
+    window.cancelEditCustomer = function() {
+        if (!customerData) return;
+        renderCustomerView(customerData);
+    };
+
+    window.saveCustomerDetails = function() {
+        const errorEl = document.getElementById('detail-error');
+        const name = document.getElementById('detail-name').value.trim();
+        const email = document.getElementById('detail-email').value.trim();
+        const phone = document.getElementById('detail-phone').value.trim();
+        const address = document.getElementById('detail-address').value.trim();
+        const dateOfBirth = document.getElementById('detail-dob').value;
+
+        if (!name || !email) {
+            errorEl.textContent = 'Name and email are required';
+            errorEl.classList.remove('d-none');
+            return;
+        }
+
+        fetch(API, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name,
+                email,
+                phone: phone || null,
+                address: address || null,
+                date_of_birth: dateOfBirth || null,
+            }),
+        })
+            .then(r => {
+                if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Failed to save'); });
+                return r.json();
+            })
+            .then(data => {
+                customerData = data;
+                renderCustomerView(data);
+            })
+            .catch(err => {
+                errorEl.textContent = err.message;
+                errorEl.classList.remove('d-none');
+            });
+    };
+
+    window.openAssignConfig = function() {
+        document.getElementById('assign-config-error').classList.add('d-none');
+        drawerCustomerInput.value = CUSTOMER_ID;
+        drawerCustomerSearch.value = customerData ? `${customerData.name} (${customerData.id})` : CUSTOMER_ID;
+        configTypeSelect.value = 'preset';
+        presetSelect.value = '';
+        syncDrawerSelectionInput('configType');
+        syncDrawerSelectionInput('preset');
+        document.getElementById('assign-effective-from').value = new Date().toISOString().split('T')[0];
+        document.getElementById('assign-commission').value = '0';
+        document.getElementById('assign-affiliate').value = '0';
+        document.getElementById('assign-gmv').value = '0';
+        document.getElementById('assign-per-order-fee').value = '0';
+        document.getElementById('assign-per-order-threshold').value = '0';
+        document.getElementById('assign-flat-fee').value = '0';
+        clearAssignConfigFields(true);
+        toggleAssignConfigType();
+        bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('assign-config-drawer')).show();
+    };
+
+    window.saveConfigAssignment = function() {
+        const errorEl = document.getElementById('assign-config-error');
+        const type = configTypeSelect.value;
+        const effectiveFrom = document.getElementById('assign-effective-from').value;
+        const presetId = presetSelect.value;
+
+        if (!effectiveFrom) {
+            errorEl.textContent = 'Effective date is required';
+            errorEl.classList.remove('d-none');
+            return;
+        }
+
+        const body = {
+            customer_id: drawerCustomerInput.value || CUSTOMER_ID,
+            effective_from: effectiveFrom,
+        };
+
+        if (type === 'preset') {
+            if (!presetId) {
+                errorEl.textContent = 'Please select a preset config';
+                errorEl.classList.remove('d-none');
+                return;
+            }
+            body.preset_config_id = parseInt(presetId, 10);
+        } else {
+            body.custom_config = getCustomConfigFromAssignForm();
+        }
+
+        fetch(MATRIX_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        })
+            .then(r => {
+                if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Failed to create assignment'); });
+                return r.json();
+            })
+            .then(() => {
+                bootstrap.Offcanvas.getInstance(document.getElementById('assign-config-drawer')).hide();
+                loadConfigs();
+            })
+            .catch(err => {
+                errorEl.textContent = err.message;
+                errorEl.classList.remove('d-none');
+            });
+    };
+
+    function filteredOptions(options, query) {
+        const q = query.trim().toLowerCase();
+        if (!q) return options;
+        return options.filter(o =>
+            String(o.label).toLowerCase().includes(q) ||
+            String(o.subtext || '').toLowerCase().includes(q)
+        );
+    }
+
+    function renderSearchableMenu(menuEl, options, keyName) {
+        if (!options.length) {
+            menuEl.innerHTML = '<div class="searchable-filter-empty">No matches</div>';
+            menuEl.dataset.options = '[]';
+            return;
+        }
+
+        menuEl.dataset.options = JSON.stringify(options.map(o => ({ key: o[keyName], label: o.label, subtext: o.subtext || '' })));
+        menuEl.innerHTML = options.map((o, idx) => `
+            <button type="button" class="searchable-filter-option" data-index="${idx}">
+                <span class="searchable-filter-option-main">${esc(o.label)}</span>
+                ${o.subtext ? `<span class="searchable-filter-option-sub">${esc(o.subtext)}</span>` : ''}
+            </button>
+        `).join('');
+    }
+
+    function bindSearchableFilter(inputEl, menuEl, getOptions, keyName, onPick, onClear) {
+        const wrapperEl = inputEl.closest('.searchable-filter');
+
+        function closeAllSearchableMenus() {
+            document.querySelectorAll('.searchable-filter-menu').forEach(function(menu) {
+                if (menu !== menuEl) menu.classList.add('d-none');
+            });
+            document.querySelectorAll('.searchable-filter.is-open').forEach(function(el) {
+                if (el !== wrapperEl) el.classList.remove('is-open');
+            });
+        }
+
+        function openMenu() {
+            closeAllSearchableMenus();
+            menuEl.classList.remove('d-none');
+            if (wrapperEl) wrapperEl.classList.add('is-open');
+        }
+
+        function closeMenu() {
+            menuEl.classList.add('d-none');
+            if (wrapperEl) wrapperEl.classList.remove('is-open');
+        }
+
+        function refreshMenu(forceAll = false) {
+            const query = forceAll ? '' : inputEl.value;
+            const options = filteredOptions(getOptions(), query);
+            renderSearchableMenu(menuEl, options, keyName);
+            openMenu();
+            return options;
+        }
+
+        inputEl.addEventListener('focus', function() {
+            refreshMenu(true);
+        });
+        inputEl.addEventListener('click', function() {
+            refreshMenu(true);
+        });
+        inputEl.addEventListener('input', function() {
+            if (!inputEl.value.trim()) onClear();
+            refreshMenu();
+        });
+        inputEl.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const options = filteredOptions(getOptions(), inputEl.value);
+                if (options.length > 0) {
+                    const first = options[0];
+                    onPick({
+                        key: first[keyName],
+                        label: first.label,
+                        subtext: first.subtext || '',
+                    });
+                } else {
+                    onClear();
+                    inputEl.value = '';
+                }
+                closeMenu();
+            } else if (event.key === 'Escape') {
+                closeMenu();
+            }
+        });
+        inputEl.addEventListener('blur', function() {
+            setTimeout(closeMenu, 120);
+        });
+        menuEl.addEventListener('mousedown', function(event) {
+            event.preventDefault();
+        });
+        menuEl.addEventListener('click', function(event) {
+            const button = event.target.closest('.searchable-filter-option');
+            if (!button) return;
+            const options = JSON.parse(menuEl.dataset.options || '[]');
+            const pick = options[Number(button.dataset.index)];
+            if (!pick) return;
+            onPick(pick);
+            closeMenu();
+        });
+    }
+
+    function syncDrawerSelectionInput(kind) {
+        if (kind === 'preset') {
+            const selected = drawerPresetOptions.find(o => o.key === String(presetSelect.value || ''));
+            drawerPresetSearch.value = selected ? selected.label : '';
+            return;
+        }
+        const selectedType = drawerConfigTypeOptions.find(o => o.key === String(configTypeSelect.value || 'preset'));
+        drawerConfigTypeSearch.value = selectedType ? selectedType.label : 'Preset Config';
+    }
+
+    bindSearchableFilter(
+        drawerConfigTypeSearch,
+        drawerConfigTypeMenu,
+        () => drawerConfigTypeOptions,
+        'key',
+        function(pick) {
+            configTypeSelect.value = pick.key;
+            drawerConfigTypeSearch.value = pick.label;
+            toggleAssignConfigType();
+        },
+        function() {
+            configTypeSelect.value = 'preset';
+            drawerConfigTypeSearch.value = 'Preset Config';
+            toggleAssignConfigType();
+        }
+    );
+
+    bindSearchableFilter(
+        drawerPresetSearch,
+        drawerPresetMenu,
+        () => drawerPresetOptions,
+        'key',
+        function(pick) {
+            presetSelect.value = pick.key;
+            drawerPresetSearch.value = pick.label;
+            if (configTypeSelect.value === 'preset') {
+                const preset = presetsCache.find(p => String(p.id) === String(pick.key));
+                if (preset) setAssignConfigFields(preset.config, true);
+            }
+        },
+        function() {
+            presetSelect.value = '';
+            if (configTypeSelect.value === 'preset') {
+                clearAssignConfigFields(true);
+            }
+        }
+    );
+
     loadCustomer();
+    loadPresetConfigs();
     loadNotes();
     loadConfigs();
 })();

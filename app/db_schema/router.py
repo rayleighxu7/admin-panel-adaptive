@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sqlalchemy import inspect as sa_inspect, text
+from sqlalchemy import MetaData, Table, func, inspect as sa_inspect, select
 
 from app.database import get_engine
 
@@ -53,6 +53,7 @@ class SchemaResponse(BaseModel):
 async def get_schema():
     engine = get_engine()
     inspector = sa_inspect(engine)
+    metadata = MetaData()
     tables: list[TableInfo] = []
     total_rows = 0
     total_columns = 0
@@ -70,13 +71,10 @@ async def get_schema():
                 ref_col = fk["referred_columns"][i]
                 fk_map[col] = f'{fk["referred_table"]}.{ref_col}'
 
+        table_ref = Table(table_name, metadata, autoload_with=engine)
         with engine.connect() as conn:
-            row_count = conn.execute(
-                text(f'SELECT COUNT(*) FROM "{table_name}"')
-            ).scalar()
-            result = conn.execute(
-                text(f'SELECT * FROM "{table_name}" LIMIT 10')
-            )
+            row_count = conn.execute(select(func.count()).select_from(table_ref)).scalar()
+            result = conn.execute(select(table_ref).limit(10))
             sample_rows = [
                 {k: _serialise(v) for k, v in row._mapping.items()}
                 for row in result

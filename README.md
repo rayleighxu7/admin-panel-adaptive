@@ -29,6 +29,8 @@ uv run uvicorn app.main:app --reload
 
 Open http://localhost:8000 to access the admin panel.
 
+For security, set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in `.env` before starting when `ENABLE_AUTH=true` (default).
+
 ## Database Setup
 
 For local SQLite development, initialize tables from the SQLAlchemy models:
@@ -226,9 +228,15 @@ statics/
 |----------|---------|-------------|
 | `DATABASE_URL` | `sqlite:///./sqlite.db` | Database connection string |
 | `DEBUG` | `false` | Enable debug mode |
-| `SECRET_KEY` | `changeme` | Secret key for sessions |
-| `PRIMARY_COLOR` | `#0054a6` | UI primary color |
-| `BRAND_NAME` | `Admin Panel` | Application name |
+| `ENABLE_AUTH` | `true` | Require HTTP Basic auth for all pages/APIs (except static assets) |
+| `ADMIN_USERNAME` | `admin` | Admin username (must be overridden in production) |
+| `ADMIN_PASSWORD` | `change-me-now` | Admin password (must be overridden in production) |
+| `ENABLE_SCHEMA_BROWSER` | `false` | Enable DB schema explorer routes (`/schema`, `/api/schema`) |
+| `ENABLE_SCHEMA_SAMPLE_ROWS` | `false` | Include sample row data in schema API responses |
+| `SCHEMA_SAMPLE_LIMIT` | `5` | Max sample rows per table when enabled |
+| `BRAND_PRIMARY` | `#206bc4` | UI primary color |
+| `BRAND_SIDEBAR_BG` | `#1b2434` | Sidebar background color |
+| `BRAND_SIDEBAR_TEXT` | `#ffffff` | Sidebar text color |
 
 ## Installing Database Drivers
 

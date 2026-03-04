@@ -22,7 +22,14 @@
     <div class="row">
         <div class="col-lg-5">
             <div class="card mb-4">
-                <div class="card-header"><h3 class="card-title">Config Values</h3></div>
+                <div class="card-header">
+                    <h3 class="card-title">Config Values</h3>
+                    <div class="card-actions">
+                        <button class="btn btn-sm btn-primary" id="preset-edit-btn" onclick="openEditPreset()">
+                            <i class="fa fa-pen me-1"></i>Edit
+                        </button>
+                    </div>
+                </div>
                 <div class="card-body" id="config-body">
                     <div class="text-center text-muted py-3">
                         <i class="fa fa-spinner fa-spin"></i> Loading&hellip;
@@ -35,6 +42,9 @@
                 <div class="card-header">
                     <h3 class="card-title">Customers Using This Preset</h3>
                     <div class="card-actions">
+                        <button class="btn btn-primary btn-sm me-2" id="assign-customer-btn" onclick="openAssignCustomer()">
+                            <i class="fa fa-plus me-1"></i>Assign Customer
+                        </button>
                         <span class="badge bg-blue-lt" id="customer-count">0</span>
                     </div>
                 </div>
@@ -47,12 +57,87 @@
         </div>
     </div>
 </div>
+<div class="offcanvas offcanvas-end drawer-lg" tabindex="-1" id="assign-customer-drawer">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title">Assign Config</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div id="assign-customer-error" class="alert alert-danger d-none"></div>
+        <div class="mb-3">
+            <label class="form-label">Customer</label>
+            <div class="searchable-filter">
+                <input
+                    type="text"
+                    class="form-control"
+                    id="input-customer-search"
+                    placeholder="Select customer (type to search)"
+                    autocomplete="off"
+                >
+                <div class="searchable-filter-menu d-none" id="input-customer-menu"></div>
+            </div>
+            <input type="hidden" id="input-customer">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Config Type</label>
+            <input type="text" class="form-control" value="Preset Config" disabled>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Preset Config</label>
+            <input type="text" class="form-control" id="input-preset-name" disabled>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Effective From</label>
+            <input type="date" class="form-control" id="input-effective-from">
+        </div>
+        <hr class="my-3">
+        <div class="form-section-title">Config Values</div>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label">Commission %</label>
+                <input type="number" step="0.01" class="form-control" id="cfg-commission" disabled>
+            </div>
+            <div class="col-6">
+                <label class="form-label">Affiliate %</label>
+                <input type="number" step="0.01" class="form-control" id="cfg-affiliate" disabled>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">GMV %</label>
+            <input type="number" step="0.01" class="form-control" id="cfg-gmv" disabled>
+        </div>
+        <div class="row mb-3">
+            <div class="col-6">
+                <label class="form-label">Per Order Fee ($)</label>
+                <input type="number" step="0.01" class="form-control" id="cfg-per-order-fee" disabled>
+            </div>
+            <div class="col-6">
+                <label class="form-label">Qty Threshold</label>
+                <input type="number" class="form-control" id="cfg-per-order-threshold" disabled>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Flat Fee ($)</label>
+            <input type="number" step="0.01" class="form-control" id="cfg-flat-fee" disabled>
+        </div>
+    </div>
+    <div class="offcanvas-footer p-3 border-top d-flex">
+        <button type="button" class="btn me-auto" data-bs-dismiss="offcanvas">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveCustomerAssignment()">Save</button>
+    </div>
+</div>
 {% endblock %}
 
 {% block script %}
 <script>
 (function() {
     const PRESET_ID = {{ preset_id }};
+    const MATRIX_API = '/api/config-matrix';
+    const drawerCustomerSearch = document.getElementById('input-customer-search');
+    const drawerCustomerMenu = document.getElementById('input-customer-menu');
+    const drawerCustomerInput = document.getElementById('input-customer');
+    let presetData = null;
+    let customerOptions = [];
 
     function esc(str) {
         const d = document.createElement('div');
@@ -68,34 +153,214 @@
     function fmtPct(val) { return (val * 100).toFixed(2) + '%'; }
     function fmtDollars(cents) { return '$' + (cents / 100).toFixed(2); }
 
+    function setAssignConfigFields(config) {
+        document.getElementById('cfg-commission').value = (config.commission_percentage * 100).toFixed(2);
+        document.getElementById('cfg-affiliate').value = (config.affiliate_percentage * 100).toFixed(2);
+        document.getElementById('cfg-gmv').value = (config.gmv_percentage * 100).toFixed(2);
+        document.getElementById('cfg-per-order-fee').value = (config.per_order.fee_cents / 100).toFixed(2);
+        document.getElementById('cfg-per-order-threshold').value = config.per_order.quantity_threshold;
+        document.getElementById('cfg-flat-fee').value = (config.flat_fee_cents / 100).toFixed(2);
+    }
+
+    function filteredOptions(options, query) {
+        const q = query.trim().toLowerCase();
+        if (!q) return options;
+        return options.filter(o =>
+            String(o.label).toLowerCase().includes(q) ||
+            String(o.subtext || '').toLowerCase().includes(q)
+        );
+    }
+
+    function renderSearchableMenu(menuEl, options, keyName) {
+        if (!options.length) {
+            menuEl.innerHTML = '<div class="searchable-filter-empty">No matches</div>';
+            menuEl.dataset.options = '[]';
+            return;
+        }
+
+        menuEl.dataset.options = JSON.stringify(options.map(o => ({ key: o[keyName], label: o.label, subtext: o.subtext || '' })));
+        menuEl.innerHTML = options.map((o, idx) => `
+            <button type="button" class="searchable-filter-option" data-index="${idx}">
+                <span class="searchable-filter-option-main">${esc(o.label)}</span>
+                ${o.subtext ? `<span class="searchable-filter-option-sub">${esc(o.subtext)}</span>` : ''}
+            </button>
+        `).join('');
+    }
+
+    function bindSearchableFilter(inputEl, menuEl, getOptions, keyName, onPick, onClear) {
+        const wrapperEl = inputEl.closest('.searchable-filter');
+
+        function closeAllSearchableMenus() {
+            document.querySelectorAll('.searchable-filter-menu').forEach(function(menu) {
+                if (menu !== menuEl) menu.classList.add('d-none');
+            });
+            document.querySelectorAll('.searchable-filter.is-open').forEach(function(el) {
+                if (el !== wrapperEl) el.classList.remove('is-open');
+            });
+        }
+
+        function openMenu() {
+            closeAllSearchableMenus();
+            menuEl.classList.remove('d-none');
+            if (wrapperEl) wrapperEl.classList.add('is-open');
+        }
+
+        function closeMenu() {
+            menuEl.classList.add('d-none');
+            if (wrapperEl) wrapperEl.classList.remove('is-open');
+        }
+
+        function refreshMenu(forceAll = false) {
+            const query = forceAll ? '' : inputEl.value;
+            const options = filteredOptions(getOptions(), query);
+            renderSearchableMenu(menuEl, options, keyName);
+            openMenu();
+            return options;
+        }
+
+        inputEl.addEventListener('focus', function() {
+            refreshMenu(true);
+        });
+        inputEl.addEventListener('click', function() {
+            refreshMenu(true);
+        });
+        inputEl.addEventListener('input', function() {
+            if (!inputEl.value.trim()) onClear();
+            refreshMenu();
+        });
+        inputEl.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const options = filteredOptions(getOptions(), inputEl.value);
+                if (options.length > 0) {
+                    const first = options[0];
+                    onPick({
+                        key: first[keyName],
+                        label: first.label,
+                        subtext: first.subtext || '',
+                    });
+                } else {
+                    onClear();
+                    inputEl.value = '';
+                }
+                closeMenu();
+            } else if (event.key === 'Escape') {
+                closeMenu();
+            }
+        });
+        inputEl.addEventListener('blur', function() {
+            setTimeout(closeMenu, 120);
+        });
+        menuEl.addEventListener('mousedown', function(event) {
+            event.preventDefault();
+        });
+        menuEl.addEventListener('click', function(event) {
+            const button = event.target.closest('.searchable-filter-option');
+            if (!button) return;
+            const options = JSON.parse(menuEl.dataset.options || '[]');
+            const pick = options[Number(button.dataset.index)];
+            if (!pick) return;
+            onPick(pick);
+            closeMenu();
+        });
+    }
+
+    function loadCustomerLookup() {
+        fetch('/api/customers?limit=200')
+            .then(r => r.json())
+            .then(data => {
+                customerOptions = (data.customers || []).map(c => ({
+                    key: c.id,
+                    label: c.name,
+                    subtext: c.id,
+                }));
+            });
+    }
+
+    function renderPresetView(data) {
+        const c = data.config;
+        document.getElementById('config-body').innerHTML = `
+            <div class="mb-3"><h3 class="mb-0">${esc(data.name)}</h3><div class="text-muted small">ID: ${data.id}</div></div>
+            <div class="row mb-2">
+                <div class="col-6"><label class="form-label text-muted mb-0">Commission</label><div>${fmtPct(c.commission_percentage)}</div></div>
+                <div class="col-6"><label class="form-label text-muted mb-0">Affiliate</label><div>${fmtPct(c.affiliate_percentage)}</div></div>
+            </div>
+            <div class="mb-2"><label class="form-label text-muted mb-0">GMV</label><div>${fmtPct(c.gmv_percentage)}</div></div>
+            <hr class="my-2">
+            <div class="row mb-2">
+                <div class="col-6"><label class="form-label text-muted mb-0">Per Order Fee</label><div>${fmtDollars(c.per_order.fee_cents)}</div></div>
+                <div class="col-6"><label class="form-label text-muted mb-0">Qty Threshold</label><div>${c.per_order.quantity_threshold}</div></div>
+            </div>
+            <hr class="my-2">
+            <div class="mb-2"><label class="form-label text-muted mb-0">Flat Fee</label><div>${fmtDollars(c.flat_fee_cents)}</div></div>
+            <hr class="my-2">
+            <div class="row">
+                <div class="col-6"><label class="form-label text-muted mb-0">Created</label><div>${formatDate(data.created_at)}</div></div>
+                <div class="col-6"><label class="form-label text-muted mb-0">Updated</label><div>${formatDate(data.updated_at)}</div></div>
+            </div>
+        `;
+        document.getElementById('preset-edit-btn').classList.remove('d-none');
+    }
+
+    function renderPresetEdit(data) {
+        const c = data.config;
+        document.getElementById('config-body').innerHTML = `
+            <div id="preset-error" class="alert alert-danger d-none"></div>
+            <div class="mb-3">
+                <label class="form-label">Preset Name</label>
+                <input class="form-control" id="preset-name" value="${esc(data.name)}">
+            </div>
+            <hr class="my-3">
+            <div class="row mb-3">
+                <div class="col-6">
+                    <label class="form-label">Commission %</label>
+                    <input class="form-control" type="number" step="0.01" id="preset-commission" value="${(c.commission_percentage * 100).toFixed(2)}">
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Affiliate %</label>
+                    <input class="form-control" type="number" step="0.01" id="preset-affiliate" value="${(c.affiliate_percentage * 100).toFixed(2)}">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">GMV %</label>
+                <input class="form-control" type="number" step="0.01" id="preset-gmv" value="${(c.gmv_percentage * 100).toFixed(2)}">
+            </div>
+            <hr class="my-3">
+            <div class="row mb-3">
+                <div class="col-6">
+                    <label class="form-label">Per Order Fee ($)</label>
+                    <input class="form-control" type="number" step="0.01" id="preset-fee" value="${(c.per_order.fee_cents / 100).toFixed(2)}">
+                </div>
+                <div class="col-6">
+                    <label class="form-label">Qty Threshold</label>
+                    <input class="form-control" type="number" id="preset-threshold" value="${c.per_order.quantity_threshold}">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Flat Fee ($)</label>
+                <input class="form-control" type="number" step="0.01" id="preset-flat-fee" value="${(c.flat_fee_cents / 100).toFixed(2)}">
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" onclick="savePresetDetails()">Save</button>
+                <button class="btn" onclick="cancelEditPreset()">Cancel</button>
+            </div>
+        `;
+        document.getElementById('preset-edit-btn').classList.add('d-none');
+    }
+
     function loadPreset() {
         fetch(`/api/preset-configs/${PRESET_ID}`)
             .then(r => { if (!r.ok) throw new Error('Not found'); return r.json(); })
             .then(data => {
-                const c = data.config;
-                document.getElementById('config-body').innerHTML = `
-                    <div class="mb-3"><h3 class="mb-0">${esc(data.name)}</h3><div class="text-muted small">ID: ${data.id}</div></div>
-                    <div class="row mb-2">
-                        <div class="col-6"><label class="form-label text-muted mb-0">Commission</label><div>${fmtPct(c.commission_percentage)}</div></div>
-                        <div class="col-6"><label class="form-label text-muted mb-0">Affiliate</label><div>${fmtPct(c.affiliate_percentage)}</div></div>
-                    </div>
-                    <div class="mb-2"><label class="form-label text-muted mb-0">GMV</label><div>${fmtPct(c.gmv_percentage)}</div></div>
-                    <hr class="my-2">
-                    <div class="row mb-2">
-                        <div class="col-6"><label class="form-label text-muted mb-0">Per Order Fee</label><div>${fmtDollars(c.per_order.fee_cents)}</div></div>
-                        <div class="col-6"><label class="form-label text-muted mb-0">Qty Threshold</label><div>${c.per_order.quantity_threshold}</div></div>
-                    </div>
-                    <hr class="my-2">
-                    <div class="mb-2"><label class="form-label text-muted mb-0">Flat Fee</label><div>${fmtDollars(c.flat_fee_cents)}</div></div>
-                    <hr class="my-2">
-                    <div class="row">
-                        <div class="col-6"><label class="form-label text-muted mb-0">Created</label><div>${formatDate(data.created_at)}</div></div>
-                        <div class="col-6"><label class="form-label text-muted mb-0">Updated</label><div>${formatDate(data.updated_at)}</div></div>
-                    </div>
-                `;
+                presetData = data;
+                renderPresetView(data);
+                document.getElementById('input-preset-name').value = data.name;
+                setAssignConfigFields(data.config);
             })
             .catch(() => {
                 document.getElementById('config-body').innerHTML = '<div class="text-center text-danger py-3">Preset not found</div>';
+                document.getElementById('preset-edit-btn').classList.add('d-none');
+                document.getElementById('assign-customer-btn').classList.add('d-none');
             });
     }
 
@@ -133,7 +398,134 @@
             });
     }
 
+    window.openEditPreset = function() {
+        if (!presetData) return;
+        renderPresetEdit(presetData);
+    };
+
+    window.cancelEditPreset = function() {
+        if (!presetData) return;
+        renderPresetView(presetData);
+    };
+
+    window.savePresetDetails = function() {
+        const errorEl = document.getElementById('preset-error');
+        const name = document.getElementById('preset-name').value.trim();
+
+        if (!name) {
+            errorEl.textContent = 'Name is required';
+            errorEl.classList.remove('d-none');
+            return;
+        }
+
+        fetch(`/api/preset-configs/${PRESET_ID}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name,
+                config: {
+                    commission_percentage: (parseFloat(document.getElementById('preset-commission').value) || 0) / 100,
+                    affiliate_percentage: (parseFloat(document.getElementById('preset-affiliate').value) || 0) / 100,
+                    gmv_percentage: (parseFloat(document.getElementById('preset-gmv').value) || 0) / 100,
+                    per_order: {
+                        fee_cents: Math.round((parseFloat(document.getElementById('preset-fee').value) || 0) * 100),
+                        quantity_threshold: parseInt(document.getElementById('preset-threshold').value, 10) || 0,
+                    },
+                    flat_fee_cents: Math.round((parseFloat(document.getElementById('preset-flat-fee').value) || 0) * 100),
+                },
+            }),
+        })
+            .then(r => {
+                if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Failed to save'); });
+                return r.json();
+            })
+            .then(data => {
+                presetData = data;
+                renderPresetView(data);
+                loadCustomers();
+            })
+            .catch(err => {
+                errorEl.textContent = err.message;
+                errorEl.classList.remove('d-none');
+            });
+    };
+
+    window.openAssignCustomer = function() {
+        const errorEl = document.getElementById('assign-customer-error');
+        errorEl.classList.add('d-none');
+        drawerCustomerInput.value = '';
+        drawerCustomerSearch.value = '';
+        document.getElementById('input-effective-from').value = new Date().toISOString().split('T')[0];
+        if (presetData) {
+            document.getElementById('input-preset-name').value = presetData.name;
+            setAssignConfigFields(presetData.config);
+        }
+        bootstrap.Offcanvas.getOrCreateInstance(document.getElementById('assign-customer-drawer')).show();
+    };
+
+    window.saveCustomerAssignment = function() {
+        const errorEl = document.getElementById('assign-customer-error');
+        const customerId = drawerCustomerInput.value;
+        const effectiveFrom = document.getElementById('input-effective-from').value;
+
+        drawerCustomerSearch.classList.remove('is-invalid');
+        document.getElementById('input-effective-from').classList.remove('is-invalid');
+
+        if (!customerId || !effectiveFrom) {
+            if (!customerId) drawerCustomerSearch.classList.add('is-invalid');
+            if (!effectiveFrom) document.getElementById('input-effective-from').classList.add('is-invalid');
+            errorEl.textContent = 'Customer and effective date are required';
+            errorEl.classList.remove('d-none');
+            return;
+        }
+
+        fetch(MATRIX_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                customer_id: customerId,
+                preset_config_id: PRESET_ID,
+                effective_from: effectiveFrom,
+            }),
+        })
+            .then(r => {
+                if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Failed to create assignment'); });
+                return r.json();
+            })
+            .then(() => {
+                bootstrap.Offcanvas.getInstance(document.getElementById('assign-customer-drawer')).hide();
+                loadCustomers();
+            })
+            .catch(err => {
+                errorEl.textContent = err.message;
+                errorEl.classList.remove('d-none');
+            });
+    };
+
+    bindSearchableFilter(
+        drawerCustomerSearch,
+        drawerCustomerMenu,
+        () => customerOptions,
+        'key',
+        function(pick) {
+            drawerCustomerInput.value = pick.key;
+            drawerCustomerSearch.value = pick.label;
+            drawerCustomerSearch.classList.remove('is-invalid');
+        },
+        function() {
+            drawerCustomerInput.value = '';
+        }
+    );
+
+    drawerCustomerSearch.addEventListener('input', function() {
+        this.classList.remove('is-invalid');
+    });
+    document.getElementById('input-effective-from').addEventListener('input', function() {
+        this.classList.remove('is-invalid');
+    });
+
     loadPreset();
+    loadCustomerLookup();
     loadCustomers();
 })();
 </script>

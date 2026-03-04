@@ -439,14 +439,20 @@
             if (wrapperEl) wrapperEl.classList.remove('is-open');
         }
 
-        function refreshMenu() {
-            const options = filteredOptions(getOptions(), inputEl.value);
+        function refreshMenu(forceAll = false) {
+            const query = forceAll ? '' : inputEl.value;
+            const options = filteredOptions(getOptions(), query);
             renderSearchableMenu(menuEl, options, keyName);
             openMenu();
             return options;
         }
 
-        inputEl.addEventListener('focus', refreshMenu);
+        inputEl.addEventListener('focus', function() {
+            refreshMenu(true);
+        });
+        inputEl.addEventListener('click', function() {
+            refreshMenu(true);
+        });
         inputEl.addEventListener('input', function() {
             if (!inputEl.value.trim()) {
                 onClear();

@@ -152,8 +152,8 @@
                     <div class="text-meta">${esc(c.id)}</div>
                 </td>
                 <td>${esc(c.email)}</td>
-                <td>${c.phone ? esc(c.phone) : '<span class="text-muted">—</span>'}</td>
-                <td>${c.date_of_birth ? formatDate(c.date_of_birth) : '<span class="text-muted">—</span>'}</td>
+                <td>${c.phone ? esc(c.phone) : ''}</td>
+                <td>${c.date_of_birth ? formatDate(c.date_of_birth) : ''}</td>
                 <td class="text-meta">${formatDate(c.created_at)}</td>
                 <td>
                     <div class="dropdown">

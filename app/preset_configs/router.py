@@ -1,10 +1,11 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -53,12 +54,12 @@ class PresetConfigOut(BaseModel):
 
 
 class PresetConfigCreate(BaseModel):
-    name: str
+    name: Annotated[str, Field(min_length=1, max_length=100)]
     config: ConfigSchema
 
 
 class PresetConfigUpdate(BaseModel):
-    name: str | None = None
+    name: Annotated[str, Field(min_length=1, max_length=100)] | None = None
     config: ConfigSchema | None = None
 
 
@@ -138,8 +139,12 @@ async def get_preset_config(preset_id: int, db: Session = Depends(get_db)):
 async def create_preset_config(body: PresetConfigCreate, db: Session = Depends(get_db)):
     preset = PresetConfig(name=body.name, config=body.config.model_dump())
     db.add(preset)
-    db.commit()
-    db.refresh(preset)
+    try:
+        db.commit()
+        db.refresh(preset)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Preset name already exists")
     return PresetConfigOut.model_validate(preset)
 
 
@@ -163,8 +168,12 @@ async def update_preset_config(
     for field, value in updates.items():
         setattr(preset, field, value)
 
-    db.commit()
-    db.refresh(preset)
+    try:
+        db.commit()
+        db.refresh(preset)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Preset name already exists")
     return PresetConfigOut.model_validate(preset)
 
 

@@ -1,10 +1,11 @@
 from datetime import date, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -37,7 +38,7 @@ class ConfigMatrixOut(BaseModel):
 
 
 class ConfigMatrixCreate(BaseModel):
-    customer_id: str
+    customer_id: Annotated[str, Field(min_length=1, max_length=36)]
     preset_config_id: int | None = None
     custom_config: ConfigSchema | None = None
     effective_from: date
@@ -55,6 +56,12 @@ class ConfigMatrixUpdate(BaseModel):
     preset_config_id: int | None = None
     custom_config: ConfigSchema | None = None
     effective_from: date | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_update(self):
+        if self.preset_config_id is None and self.custom_config is None and self.effective_from is None:
+            raise ValueError("No fields to update")
+        return self
 
 
 class ConfigMatrixListResponse(BaseModel):
@@ -170,8 +177,12 @@ async def create_config_matrix(body: ConfigMatrixCreate, db: Session = Depends(g
         effective_from=body.effective_from,
     )
     db.add(entry)
-    db.commit()
-    db.refresh(entry)
+    try:
+        db.commit()
+        db.refresh(entry)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Invalid config assignment")
 
     m = _active_query(db).filter(CustomerConfigMatrix.id == entry.id).first()
     return _to_out(m)
@@ -188,8 +199,6 @@ async def update_config_matrix(
         raise HTTPException(status_code=404, detail="Config matrix entry not found")
 
     updates = body.model_dump(exclude_unset=True)
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
 
     if "preset_config_id" in updates:
         if updates["preset_config_id"] is not None:
@@ -214,8 +223,12 @@ async def update_config_matrix(
     if "effective_from" in updates:
         m.effective_from = updates["effective_from"]
 
-    db.commit()
-    db.refresh(m)
+    try:
+        db.commit()
+        db.refresh(m)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Invalid config assignment state")
 
     m = _active_query(db).filter(CustomerConfigMatrix.id == matrix_id).first()
     return _to_out(m)
