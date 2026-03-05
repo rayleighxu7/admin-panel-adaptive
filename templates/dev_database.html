@@ -24,6 +24,32 @@
     .dev-db .card-header[data-bs-toggle="collapse"]:hover { background-color: rgba(0,0,0,.02); }
     .dev-db code { font-size: 0.875em; color: #d63384; }
     .dev-db .nav-tabs .nav-link { font-size: 0.875rem; }
+    .dev-db .resizable-table { table-layout: fixed; width: 100%; min-width: 100%; }
+    .dev-db .resizable-table th { position: relative; }
+    .dev-db .resizable-table th {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .dev-db .resizable-table td {
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        vertical-align: top;
+    }
+    .dev-db .resizable-table .resize-handle {
+        position: absolute;
+        top: 0;
+        right: -4px;
+        width: 8px;
+        height: 100%;
+        cursor: col-resize;
+        user-select: none;
+        touch-action: none;
+    }
+    .dev-db .resizable-table th.is-resizing {
+        background-color: rgba(32, 107, 196, 0.08);
+    }
 </style>
 {% endblock %}
 
@@ -89,14 +115,14 @@
             dataPreviewContent = `
                 <div class="table-responsive">
                     <table class="table table-vcenter table-bordered table-sm table-striped mb-0">
-                        <thead><tr>${table.col_names.map(c => `<th class="text-nowrap"><small>${esc(c)}</small></th>`).join('')}</tr></thead>
+                        <thead><tr>${table.col_names.map(c => `<th><small>${esc(c)}</small></th>`).join('')}</tr></thead>
                         <tbody>
                             ${table.sample_rows.map(row => `<tr>${table.col_names.map(c => {
                                 const val = row[c];
-                                if (val === null || val === undefined) return '<td class="text-nowrap"><small><span class="text-muted fst-italic">NULL</span></small></td>';
+                                if (val === null || val === undefined) return '<td><small><span class="text-muted fst-italic">NULL</span></small></td>';
                                 const s = String(val);
-                                const display = s.length > 40 ? esc(s.substring(0, 37)) + '&hellip;' : esc(s);
-                                return `<td class="text-nowrap"><small>${display}</small></td>`;
+                                const display = esc(s);
+                                return `<td><small>${display}</small></td>`;
                             }).join('')}</tr>`).join('')}
                         </tbody>
                     </table>
@@ -177,7 +203,70 @@
                 </div>
             </div>`;
 
+        enableResizableTables(card);
         container.appendChild(card);
+    }
+
+    function enableResizableTables(rootEl) {
+        rootEl.querySelectorAll('table').forEach(makeTableResizable);
+    }
+
+    function makeTableResizable(table) {
+        if (!table.tHead || table.dataset.resizableBound === '1') return;
+        table.classList.add('resizable-table');
+        table.dataset.resizableBound = '1';
+
+        const headCells = Array.from(table.tHead.querySelectorAll('th'));
+        if (headCells.length < 2) return;
+
+        function updateTableWidth() {
+            const total = headCells.reduce((sum, cell) => sum + cell.getBoundingClientRect().width, 0);
+            table.style.width = `${Math.round(total)}px`;
+            table.style.minWidth = '100%';
+        }
+
+        headCells.forEach((th, idx) => {
+            const currentWidth = th.getBoundingClientRect().width;
+            th.style.width = `${Math.max(80, Math.round(currentWidth))}px`;
+            th.style.minWidth = '80px';
+            if (idx === headCells.length - 1) return;
+
+            const handle = document.createElement('span');
+            handle.className = 'resize-handle';
+            handle.setAttribute('aria-hidden', 'true');
+            th.appendChild(handle);
+
+            handle.addEventListener('mousedown', function onMouseDown(event) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const startX = event.clientX;
+                const startWidth = th.getBoundingClientRect().width;
+                th.classList.add('is-resizing');
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+
+                function onMove(moveEvent) {
+                    const delta = moveEvent.clientX - startX;
+                    const next = Math.max(80, startWidth + delta);
+                    th.style.width = `${Math.round(next)}px`;
+                    updateTableWidth();
+                }
+
+                function onUp() {
+                    th.classList.remove('is-resizing');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    window.removeEventListener('mousemove', onMove);
+                    window.removeEventListener('mouseup', onUp);
+                }
+
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onUp);
+            });
+        });
+
+        updateTableWidth();
     }
 })();
 </script>

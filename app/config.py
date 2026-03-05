@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,9 +11,14 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite:///./sqlite.db"
     DEBUG: bool = False
-    ENABLE_AUTH: bool = True
-    ADMIN_USERNAME: str = "admin"
-    ADMIN_PASSWORD: str = "change-me-now"
+    ENABLE_AUTH: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("ENABLE_AUTH", "AUTH_ENABLED"),
+    )
+    SECRET_KEY: str = "change-me-in-production"
+    SESSION_COOKIE_NAME: str = "admin_panel_session"
+    SESSION_MAX_AGE_SECONDS: int = 60 * 60 * 8
+    SESSION_HTTPS_ONLY: bool = True
     ENABLE_SCHEMA_BROWSER: bool = True
     ENABLE_SCHEMA_SAMPLE_ROWS: bool = True
     SCHEMA_SAMPLE_LIMIT: int = 10

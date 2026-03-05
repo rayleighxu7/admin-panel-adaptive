@@ -34,6 +34,12 @@ def get_engine() -> Engine:
     return _engine
 
 
+def get_session_factory() -> sessionmaker:
+    if _SessionLocal is None:
+        raise RuntimeError("Engine not initialised — call create_engine() first")
+    return _SessionLocal
+
+
 def get_db() -> Generator[Session, None, None]:
     """FastAPI dependency that yields a request-scoped DB session."""
     if _SessionLocal is None:

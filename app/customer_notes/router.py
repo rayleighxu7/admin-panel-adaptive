@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -103,12 +103,14 @@ async def update_note(
 async def delete_note(
     customer_id: str,
     note_id: int,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     note = _active_query(db, customer_id).filter(CustomerNote.id == note_id).first()
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
 
+    deleted_by = getattr(request.state, "admin_username", None) or request.session.get("admin_username") or "system"
     note.deleted_at = datetime.utcnow()
-    note.deleted_by = "api"
+    note.deleted_by = deleted_by
     db.commit()

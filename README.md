@@ -1,49 +1,84 @@
 # Adaptive Admin Panel
 
-A flexible, API-first admin panel built with FastAPI and SQLAlchemy ORM. Connects to any database supported by SQLAlchemy — swap databases by changing a single connection string.
+Adaptive Admin Panel is a FastAPI + SQLAlchemy application for managing customers, notes, preset configs, and customer-config assignments through a web UI and REST APIs.
 
-## Features
+## Highlights
 
-- **API-First Architecture**: All data operations go through REST API endpoints
-- **Database Agnostic**: Connect to SQLite, MySQL, PostgreSQL, or other SQLAlchemy-supported databases
-- **Soft Delete**: All records use `deleted_at`/`deleted_by` columns instead of hard deletes
-- **Modern UI**: Built with Tabler CSS framework for a clean, responsive interface
-- **Dynamic Schema Viewer**: Inspect database tables, columns, and sample data
+- API-first architecture with page routes powered by the same backend models
+- Session-based admin authentication
+- Soft-delete support for business entities (`deleted_at` / `deleted_by`)
+- Audit logging for all mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`)
+- Database schema explorer (`/schema`) with resizable table columns
+- Brand theming via environment-driven color variables
 
 ## Supported Databases
 
-| Backend    | `DATABASE_URL` format                                  | Extra install            |
-|------------|--------------------------------------------------------|--------------------------|
-| SQLite     | `sqlite:///./sqlite.db`                                | None (built-in)          |
-| MySQL      | `mysql+pymysql://user:pass@host:3306/db`               | `uv pip install pymysql` |
-| PostgreSQL | `postgresql://user:pass@host:5432/db`                  | `uv pip install psycopg2-binary` |
+| Backend    | `DATABASE_URL` format                    | Extra install                 |
+|------------|------------------------------------------|-------------------------------|
+| SQLite     | `sqlite:///./sqlite.db`                  | None                          |
+| MySQL      | `mysql+pymysql://user:pass@host:3306/db`| `uv sync --extra mysql`       |
+| PostgreSQL | `postgresql://user:pass@host:5432/db`   | `uv sync --extra postgres`    |
 
 ## Quick Start
 
 ```bash
 uv sync
 cp .env.example .env
-uv run python local_db_setup.py
+uv run python scripts/local_db_setup.py
+uv run python scripts/create_admin_user.py --username admin
 uv run uvicorn app.main:app --reload
 ```
 
-Open http://localhost:8000 to access the admin panel.
+Open [http://localhost:8000](http://localhost:8000).
 
-For security, set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in `.env` before starting when `ENABLE_AUTH=true` (default).
+## Authentication and Access Control
+
+- All non-static routes require authentication when `ENABLE_AUTH=true`.
+- Sessions are stored in signed cookies using `SECRET_KEY`.
+- `admin` user has exclusive access to Reference resources:
+  - `/schema`
+  - `/api/schema`
+  - `/docs`
+  - `/openapi.json`
+  - `/redoc`
+- Non-admin users are redirected (or receive `403` for API-style requests).
+
+## Audit Logging
+
+Every mutating request (`POST`, `PUT`, `PATCH`, `DELETE`) is written to `audit_log` by middleware.
+
+Captured fields include:
+
+- UTC event timestamp
+- HTTP method and endpoint
+- query parameters and path parameters
+- request body (with basic sensitive-field redaction)
+- response status code
+- authenticated admin user metadata
+- client IP and user agent
+- runtime error text if the request raises
 
 ## Database Setup
 
-For local SQLite development, initialize tables from the SQLAlchemy models:
+### Initialize schema from models
 
 ```bash
-uv run python local_db_setup.py
+uv run python scripts/local_db_setup.py
 ```
 
-For existing or non-SQLite databases, set up your schema externally using the SQL definitions below, then connect via `DATABASE_URL` in your `.env` file.
-
-### Schema Definition
+### Core schema (reference SQL)
 
 ```sql
+-- Admin users (for login)
+CREATE TABLE admin_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
 -- Customers table
 CREATE TABLE customers (
     id VARCHAR(36) PRIMARY KEY NOT NULL,
@@ -104,11 +139,30 @@ CREATE TABLE customer_config_matrix (
     CHECK ((preset_config_id IS NULL) != (custom_config_id IS NULL))
 );
 
+-- Audit log for mutating endpoints
+CREATE TABLE audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    event_time_utc DATETIME NOT NULL,
+    method VARCHAR(10) NOT NULL,
+    endpoint VARCHAR(500) NOT NULL,
+    query_params JSON NOT NULL,
+    path_params JSON NOT NULL,
+    request_body JSON NOT NULL,
+    response_status_code INTEGER NOT NULL,
+    admin_user_id INTEGER,
+    admin_username VARCHAR(100),
+    client_ip VARCHAR(64),
+    user_agent VARCHAR(512),
+    error VARCHAR(1000)
+);
+
 -- Indexes
 CREATE INDEX idx_customer_notes_customer_id ON customer_notes(customer_id);
 CREATE INDEX idx_customer_config_matrix_customer_id ON customer_config_matrix(customer_id);
 CREATE INDEX idx_customer_config_matrix_preset_config_id ON customer_config_matrix(preset_config_id);
 CREATE INDEX idx_customer_config_matrix_custom_config_id ON customer_config_matrix(custom_config_id);
+CREATE INDEX idx_audit_log_event_time_utc ON audit_log(event_time_utc);
+CREATE INDEX idx_audit_log_endpoint ON audit_log(endpoint);
 ```
 
 ### Config JSON Structure
@@ -186,7 +240,9 @@ The `config` field in `preset_configs` and `custom_configs` uses this structure:
 | `/preset-configs` | Preset config list with CRUD drawer |
 | `/preset-configs/{id}` | Preset detail with linked customers |
 | `/config-matrix` | Config assignments with customer filter |
-| `/db-schema` | Database schema viewer |
+| `/schema` | Database schema viewer (admin only) |
+| `/login` | Login page |
+| `/logout` | Ends session and redirects to login |
 
 ## Project Structure
 
@@ -228,15 +284,23 @@ statics/
 |----------|---------|-------------|
 | `DATABASE_URL` | `sqlite:///./sqlite.db` | Database connection string |
 | `DEBUG` | `false` | Enable debug mode |
-| `ENABLE_AUTH` | `true` | Require HTTP Basic auth for all pages/APIs (except static assets) |
-| `ADMIN_USERNAME` | `admin` | Admin username (must be overridden in production) |
-| `ADMIN_PASSWORD` | `change-me-now` | Admin password (must be overridden in production) |
-| `ENABLE_SCHEMA_BROWSER` | `false` | Enable DB schema explorer routes (`/schema`, `/api/schema`) |
-| `ENABLE_SCHEMA_SAMPLE_ROWS` | `false` | Include sample row data in schema API responses |
-| `SCHEMA_SAMPLE_LIMIT` | `5` | Max sample rows per table when enabled |
+| `ENABLE_AUTH` | `true` | Require login/session auth for all pages/APIs (except static assets and login routes) |
+| `SECRET_KEY` | `change-me-in-production` | Secret used to sign session cookies (must be overridden in production) |
+| `SESSION_COOKIE_NAME` | `admin_panel_session` | Session cookie name |
+| `SESSION_MAX_AGE_SECONDS` | `28800` | Session lifetime in seconds |
+| `SESSION_HTTPS_ONLY` | `true` | Mark session cookie as HTTPS-only |
+| `ENABLE_SCHEMA_BROWSER` | `true` | Enable DB schema explorer routes (`/schema`, `/api/schema`) |
+| `ENABLE_SCHEMA_SAMPLE_ROWS` | `true` | Include sample row data in schema API responses |
+| `SCHEMA_SAMPLE_LIMIT` | `10` | Max sample rows per table when enabled |
 | `BRAND_PRIMARY` | `#206bc4` | UI primary color |
 | `BRAND_SIDEBAR_BG` | `#1b2434` | Sidebar background color |
 | `BRAND_SIDEBAR_TEXT` | `#ffffff` | Sidebar text color |
+
+Create or rotate an admin user manually:
+
+```bash
+uv run python scripts/create_admin_user.py --username admin
+```
 
 ## Installing Database Drivers
 

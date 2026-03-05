@@ -19,6 +19,30 @@
     color: var(--brand-sidebar-text) !important;
 }
 
+/* Pin logout to bottom-left in desktop sidebar */
+@media (min-width: 992px) {
+    .navbar-vertical {
+        position: relative;
+    }
+
+    .navbar-vertical .container-fluid {
+        padding-bottom: 5rem;
+    }
+
+    .navbar-vertical .sidebar-logout-desktop {
+        position: absolute;
+        left: 1.1rem;
+        right: 0.75rem;
+        bottom: 1rem;
+    }
+
+    .navbar-vertical .sidebar-logout-desktop .nav-link {
+        border-radius: var(--shape-md);
+        padding-top: 0.6rem;
+        padding-bottom: 0.6rem;
+    }
+}
+
 .sidebar-brand-text {
     font-size: 1.05rem;
     letter-spacing: 0.02em;

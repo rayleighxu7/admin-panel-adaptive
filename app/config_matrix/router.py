@@ -235,7 +235,11 @@ async def update_config_matrix(
 
 
 @router.delete("/{matrix_id}", status_code=204)
-async def delete_config_matrix(matrix_id: int, db: Session = Depends(get_db)):
+async def delete_config_matrix(
+    matrix_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     m = (
         db.query(CustomerConfigMatrix)
         .filter(CustomerConfigMatrix.id == matrix_id, CustomerConfigMatrix.deleted_at.is_(None))
@@ -244,6 +248,7 @@ async def delete_config_matrix(matrix_id: int, db: Session = Depends(get_db)):
     if not m:
         raise HTTPException(status_code=404, detail="Config matrix entry not found")
 
+    deleted_by = getattr(request.state, "admin_username", None) or request.session.get("admin_username") or "system"
     m.deleted_at = datetime.utcnow()
-    m.deleted_by = "api"
+    m.deleted_by = deleted_by
     db.commit()

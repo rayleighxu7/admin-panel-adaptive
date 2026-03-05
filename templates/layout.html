@@ -50,23 +50,37 @@
                                 </a>
                             </div>
                         </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#sidebar-reference"
-                               data-bs-toggle="collapse" data-bs-auto-close="false"
-                               role="button" aria-expanded="false">
-                                <span class="nav-link-icon"><i class="fa fa-book"></i></span>
-                                <span class="nav-link-title">Reference</span>
+                        {% if request.session.get("admin_username") == "admin" %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#sidebar-reference"
+                                   data-bs-toggle="collapse" data-bs-auto-close="false"
+                                   role="button" aria-expanded="false">
+                                    <span class="nav-link-icon"><i class="fa fa-book"></i></span>
+                                    <span class="nav-link-title">Reference</span>
+                                </a>
+                                <div class="dropdown-menu collapse" id="sidebar-reference">
+                                    <a class="dropdown-item" href="/schema">
+                                        <i class="fa fa-database me-2"></i>DB Schema
+                                    </a>
+                                    <a class="dropdown-item" href="/docs" target="_blank">
+                                        <i class="fa fa-code me-2"></i>API Docs
+                                    </a>
+                                </div>
+                            </li>
+                        {% endif %}
+                        <li class="nav-item d-lg-none">
+                            <a class="nav-link" href="/logout">
+                                <span class="nav-link-icon"><i class="fa fa-right-from-bracket"></i></span>
+                                <span class="nav-link-title">Log out</span>
                             </a>
-                            <div class="dropdown-menu collapse" id="sidebar-reference">
-                                <a class="dropdown-item" href="/schema">
-                                    <i class="fa fa-database me-2"></i>DB Schema
-                                </a>
-                                <a class="dropdown-item" href="/docs" target="_blank">
-                                    <i class="fa fa-code me-2"></i>API Docs
-                                </a>
-                            </div>
                         </li>
                     </ul>
+                </div>
+                <div class="sidebar-logout-desktop d-none d-lg-block">
+                    <a class="nav-link" href="/logout">
+                        <span class="nav-link-icon"><i class="fa fa-right-from-bracket"></i></span>
+                        <span class="nav-link-title">Log out</span>
+                    </a>
                 </div>
             </div>
         </aside>
@@ -79,6 +93,26 @@
             <div class="page-body flex-grow-1">
                 <div class="container-fluid">
                     {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="admin-confirm-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="admin-confirm-title">Confirm action</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex align-items-start">
+                        <span class="me-3 text-danger"><i class="fa fa-triangle-exclamation fa-lg"></i></span>
+                        <p class="mb-0" id="admin-confirm-message">Are you sure?</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn" id="admin-confirm-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="admin-confirm-ok">Delete</button>
                 </div>
             </div>
         </div>
@@ -306,6 +340,55 @@
         });
 
         return { init: init };
+    })();
+    </script>
+    <script>
+    window.AdminConfirmDialog = (function() {
+        var modalEl = document.getElementById('admin-confirm-modal');
+        if (!modalEl || typeof bootstrap === 'undefined' || !bootstrap.Modal) {
+            return {
+                show: function(options) {
+                    return Promise.resolve(window.confirm((options && options.message) || 'Are you sure?'));
+                }
+            };
+        }
+
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var titleEl = document.getElementById('admin-confirm-title');
+        var messageEl = document.getElementById('admin-confirm-message');
+        var okBtn = document.getElementById('admin-confirm-ok');
+        var pendingResolve = null;
+
+        function cleanupAndResolve(value) {
+            if (pendingResolve) {
+                pendingResolve(value);
+                pendingResolve = null;
+            }
+        }
+
+        modalEl.addEventListener('hidden.bs.modal', function() {
+            cleanupAndResolve(false);
+        });
+
+        okBtn.addEventListener('click', function() {
+            cleanupAndResolve(true);
+            modal.hide();
+        });
+
+        function show(options) {
+            var opts = options || {};
+            titleEl.textContent = opts.title || 'Confirm action';
+            messageEl.textContent = opts.message || 'Are you sure you want to continue?';
+            okBtn.textContent = opts.confirmText || 'Confirm';
+            okBtn.className = 'btn ' + (opts.confirmClass || 'btn-danger');
+
+            return new Promise(function(resolve) {
+                pendingResolve = resolve;
+                modal.show();
+            });
+        }
+
+        return { show: show };
     })();
     </script>
     {% block script %}{% endblock %}

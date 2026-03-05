@@ -153,11 +153,16 @@ async def update_customer(
 
 
 @router.delete("/{customer_id}", status_code=204)
-async def delete_customer(customer_id: str, db: Session = Depends(get_db)):
+async def delete_customer(
+    customer_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     customer = _active_query(db).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
+    deleted_by = getattr(request.state, "admin_username", None) or request.session.get("admin_username") or "system"
     customer.deleted_at = datetime.utcnow()
-    customer.deleted_by = "api"
+    customer.deleted_by = deleted_by
     db.commit()

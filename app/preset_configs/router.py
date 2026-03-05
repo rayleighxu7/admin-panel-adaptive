@@ -178,7 +178,11 @@ async def update_preset_config(
 
 
 @router.delete("/{preset_id}", status_code=204)
-async def delete_preset_config(preset_id: int, db: Session = Depends(get_db)):
+async def delete_preset_config(
+    preset_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     preset = _active_query(db).filter(PresetConfig.id == preset_id).first()
     if not preset:
         raise HTTPException(status_code=404, detail="Preset config not found")
@@ -193,6 +197,7 @@ async def delete_preset_config(preset_id: int, db: Session = Depends(get_db)):
             detail=f"Cannot delete: preset is linked to {linked} customer{'s' if linked != 1 else ''}",
         )
 
+    deleted_by = getattr(request.state, "admin_username", None) or request.session.get("admin_username") or "system"
     preset.deleted_at = datetime.utcnow()
-    preset.deleted_by = "api"
+    preset.deleted_by = deleted_by
     db.commit()

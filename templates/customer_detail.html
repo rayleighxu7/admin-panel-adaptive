@@ -399,9 +399,16 @@
     };
 
     window.deleteNote = function(id) {
-        if (!confirm('Delete this note?')) return;
-        fetch(`${API}/notes/${id}`, { method: 'DELETE' })
-            .then(() => loadNotes());
+        window.AdminConfirmDialog.show({
+            title: 'Delete note',
+            message: 'Delete this note?',
+            confirmText: 'Delete',
+            confirmClass: 'btn-danger'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
+            fetch(`${API}/notes/${id}`, { method: 'DELETE' })
+                .then(() => loadNotes());
+        });
     };
 
     function toggleAssignConfigType() {

@@ -2,12 +2,49 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class AdminUser(Base):
+    __tablename__ = "admin_users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_time_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    method: Mapped[str] = mapped_column(String(10), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(500), nullable=False)
+    query_params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    path_params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    request_body: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    response_status_code: Mapped[int] = mapped_column(Integer, nullable=False)
+    admin_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    admin_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    error: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
 
 class Customer(Base):
