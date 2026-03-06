@@ -68,6 +68,16 @@
                     </div>
                 </div>
             </div>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3 class="card-title">Activity Timeline</h3>
+                </div>
+                <div class="card-body p-0" id="timeline-body">
+                    <div class="text-center text-muted py-4">
+                        <i class="fa fa-spinner fa-spin"></i> Loading&hellip;
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -363,6 +373,37 @@
             });
     }
 
+    function loadTimeline() {
+        fetch(`${API}/timeline?limit=40`)
+            .then(r => {
+                if (!r.ok) throw new Error('Failed to load timeline');
+                return r.json();
+            })
+            .then(data => {
+                const container = document.getElementById('timeline-body');
+                const entries = Array.isArray(data.entries) ? data.entries : [];
+                if (!entries.length) {
+                    container.innerHTML = '<div class="text-center text-muted py-4">No activity yet</div>';
+                    return;
+                }
+                container.innerHTML = '<div class="list-group list-group-flush">' + entries.map(item => `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                            <div>
+                                <div class="fw-semibold">${esc(item.title)}</div>
+                                ${item.detail ? `<div class="text-meta">${esc(item.detail)}</div>` : ''}
+                            </div>
+                            <div class="text-meta flex-shrink-0">${formatDate(item.event_time)}</div>
+                        </div>
+                    </div>
+                `).join('') + '</div>';
+            })
+            .catch(err => {
+                document.getElementById('timeline-body').innerHTML =
+                    `<div class="text-center text-danger py-4">${esc(err.message)}</div>`;
+            });
+    }
+
     window.openAddNote = function() {
         document.getElementById('note-modal-title').textContent = 'Add Note';
         document.getElementById('note-edit-id').value = '';
@@ -510,6 +551,9 @@
             .catch(err => {
                 errorEl.textContent = err.message;
                 errorEl.classList.remove('d-none');
+                if ((err.message || '').toLowerCase().includes('effective date')) {
+                    window.AdminToast.warning('Conflicting effective date for this customer');
+                }
             });
     };
 
@@ -652,6 +696,7 @@
     loadPresetConfigs();
     loadNotes();
     loadConfigs();
+    loadTimeline();
 })();
 </script>
 {% endblock %}

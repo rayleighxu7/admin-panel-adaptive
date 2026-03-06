@@ -9,9 +9,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.common import mark_soft_deleted
 from app.database import get_db
 from app.models import Customer, CustomerConfigMatrix, PresetConfig
-
+from app.schemas import ConfigSchema
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
@@ -27,19 +28,6 @@ async def preset_configs_page(request: Request):
 @page_router.get("/preset-configs/{preset_id}", include_in_schema=False)
 async def preset_config_detail_page(request: Request, preset_id: int):
     return templates.TemplateResponse(request=request, name="preset_config_detail.html", context={"preset_id": preset_id})
-
-
-class PerOrderConfig(BaseModel):
-    fee_cents: int = 0
-    quantity_threshold: int = 0
-
-
-class ConfigSchema(BaseModel):
-    commission_percentage: float = Field(0, ge=0, le=1)
-    affiliate_percentage: float = Field(0, ge=0, le=1)
-    gmv_percentage: float = Field(0, ge=0, le=1)
-    per_order: PerOrderConfig = PerOrderConfig()
-    flat_fee_cents: int = Field(0, ge=0)
 
 
 class PresetConfigOut(BaseModel):
@@ -73,7 +61,7 @@ def _active_query(db: Session):
 
 
 @router.get("", response_model=PresetConfigListResponse)
-async def list_preset_configs(
+def list_preset_configs(
     search: str | None = Query(None, description="Search by name"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -128,7 +116,7 @@ async def list_preset_configs(
 
 
 @router.get("/{preset_id}", response_model=PresetConfigOut)
-async def get_preset_config(preset_id: int, db: Session = Depends(get_db)):
+def get_preset_config(preset_id: int, db: Session = Depends(get_db)):
     preset = _active_query(db).filter(PresetConfig.id == preset_id).first()
     if not preset:
         raise HTTPException(status_code=404, detail="Preset config not found")
@@ -136,7 +124,7 @@ async def get_preset_config(preset_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=PresetConfigOut, status_code=201)
-async def create_preset_config(body: PresetConfigCreate, db: Session = Depends(get_db)):
+def create_preset_config(body: PresetConfigCreate, db: Session = Depends(get_db)):
     preset = PresetConfig(name=body.name, config=body.config.model_dump())
     db.add(preset)
     try:
@@ -149,7 +137,7 @@ async def create_preset_config(body: PresetConfigCreate, db: Session = Depends(g
 
 
 @router.patch("/{preset_id}", response_model=PresetConfigOut)
-async def update_preset_config(
+def update_preset_config(
     preset_id: int,
     body: PresetConfigUpdate,
     db: Session = Depends(get_db),
@@ -178,7 +166,7 @@ async def update_preset_config(
 
 
 @router.delete("/{preset_id}", status_code=204)
-async def delete_preset_config(
+def delete_preset_config(
     preset_id: int,
     request: Request,
     db: Session = Depends(get_db),
@@ -197,7 +185,5 @@ async def delete_preset_config(
             detail=f"Cannot delete: preset is linked to {linked} customer{'s' if linked != 1 else ''}",
         )
 
-    deleted_by = getattr(request.state, "admin_username", None) or request.session.get("admin_username") or "system"
-    preset.deleted_at = datetime.utcnow()
-    preset.deleted_by = deleted_by
+    mark_soft_deleted(preset, request)
     db.commit()

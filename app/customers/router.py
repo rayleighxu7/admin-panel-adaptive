@@ -9,8 +9,9 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.common import mark_soft_deleted
 from app.database import get_db
-from app.models import Customer
+from app.models import AuditLog, Customer, CustomerConfigMatrix, CustomerNote
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -64,12 +65,23 @@ class CustomerListResponse(BaseModel):
     total: int
 
 
+class CustomerTimelineItem(BaseModel):
+    event_time: datetime
+    event_type: str
+    title: str
+    detail: str | None = None
+
+
+class CustomerTimelineResponse(BaseModel):
+    entries: list[CustomerTimelineItem]
+
+
 def _active_query(db: Session):
     return db.query(Customer).filter(Customer.deleted_at.is_(None))
 
 
 @router.get("", response_model=CustomerListResponse)
-async def list_customers(
+def list_customers(
     search: str | None = Query(None, description="Search by name or email"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -93,8 +105,93 @@ async def list_customers(
     )
 
 
+@router.get("/{customer_id}/timeline", response_model=CustomerTimelineResponse)
+def customer_timeline(
+    customer_id: str,
+    limit: int = Query(80, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    _get = _active_query(db).filter(Customer.id == customer_id).first()
+    if not _get:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    notes = (
+        db.query(CustomerNote)
+        .filter(
+            CustomerNote.customer_id == customer_id,
+            CustomerNote.deleted_at.is_(None),
+        )
+        .order_by(CustomerNote.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    assignments = (
+        db.query(CustomerConfigMatrix)
+        .filter(
+            CustomerConfigMatrix.customer_id == customer_id,
+            CustomerConfigMatrix.deleted_at.is_(None),
+        )
+        .order_by(CustomerConfigMatrix.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    audit_rows_raw = (
+        db.query(AuditLog)
+        .filter(
+            or_(
+                AuditLog.endpoint.ilike("/api/customers%"),
+                AuditLog.endpoint.ilike("/api/config-matrix%"),
+            )
+        )
+        .order_by(AuditLog.event_time_utc.desc())
+        .limit(limit * 4)
+        .all()
+    )
+    audit_rows = []
+    for row in audit_rows_raw:
+        path_customer = str((row.path_params or {}).get("customer_id", ""))
+        body_customer = str((row.request_body or {}).get("customer_id", ""))
+        endpoint_hit = f"/api/customers/{customer_id}" in (row.endpoint or "")
+        if path_customer == customer_id or body_customer == customer_id or endpoint_hit:
+            audit_rows.append(row)
+
+    entries: list[CustomerTimelineItem] = []
+    for n in notes:
+        entries.append(
+            CustomerTimelineItem(
+                event_time=n.created_at,
+                event_type="note",
+                title="Customer note added",
+                detail=(n.note[:180] + "...") if len(n.note) > 180 else n.note,
+            )
+        )
+    for m in assignments:
+        config_type = "Preset config" if m.preset_config_id else "Custom config"
+        config_id = str(m.preset_config_id or m.custom_config_id or "")
+        entries.append(
+            CustomerTimelineItem(
+                event_time=m.created_at,
+                event_type="assignment",
+                title=f"{config_type} assignment created",
+                detail=f"Config #{config_id} effective from {m.effective_from.isoformat()}",
+            )
+        )
+    for row in audit_rows[:limit]:
+        entries.append(
+            CustomerTimelineItem(
+                event_time=row.event_time_utc,
+                event_type="audit",
+                title=f"{row.method} {row.endpoint}",
+                detail=f"Status {row.response_status_code}",
+            )
+        )
+
+    entries.sort(key=lambda item: item.event_time, reverse=True)
+    return CustomerTimelineResponse(entries=entries[:limit])
+
+
 @router.get("/{customer_id}", response_model=CustomerOut)
-async def get_customer(customer_id: str, db: Session = Depends(get_db)):
+def get_customer(customer_id: str, db: Session = Depends(get_db)):
     customer = _active_query(db).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
@@ -102,7 +199,7 @@ async def get_customer(customer_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=CustomerOut, status_code=201)
-async def create_customer(body: CustomerCreate, db: Session = Depends(get_db)):
+def create_customer(body: CustomerCreate, db: Session = Depends(get_db)):
     kwargs = {"name": body.name, "email": body.email}
     if body.id:
         kwargs["id"] = body.id
@@ -124,7 +221,7 @@ async def create_customer(body: CustomerCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{customer_id}", response_model=CustomerOut)
-async def update_customer(
+def update_customer(
     customer_id: str,
     body: CustomerUpdate,
     db: Session = Depends(get_db),
@@ -153,7 +250,7 @@ async def update_customer(
 
 
 @router.delete("/{customer_id}", status_code=204)
-async def delete_customer(
+def delete_customer(
     customer_id: str,
     request: Request,
     db: Session = Depends(get_db),
@@ -162,7 +259,5 @@ async def delete_customer(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    deleted_by = getattr(request.state, "admin_username", None) or request.session.get("admin_username") or "system"
-    customer.deleted_at = datetime.utcnow()
-    customer.deleted_by = deleted_by
+    mark_soft_deleted(customer, request)
     db.commit()

@@ -21,10 +21,12 @@
                 </button>
                 <div class="navbar-brand navbar-brand-autodark py-3">
                     <a href="/" class="d-flex align-items-center text-decoration-none">
-                        <span class="sidebar-brand-icon me-2">
-                            <i class="fa fa-cube fa-lg"></i>
-                        </span>
-                        <span class="sidebar-brand-text fw-bold">
+                        <img
+                            src="{{ request.app.state.brand_logo_url }}"
+                            alt="Freelanxur"
+                            class="sidebar-brand-logo"
+                        >
+                        <span class="sidebar-brand-text fw-bold ms-2">
                             Admin Panel
                         </span>
                     </a>
@@ -59,8 +61,13 @@
                                     <span class="nav-link-title">Reference</span>
                                 </a>
                                 <div class="dropdown-menu collapse" id="sidebar-reference">
-                                    <a class="dropdown-item" href="/schema">
-                                        <i class="fa fa-database me-2"></i>DB Schema
+                                    {% if request.app.state.enable_schema_browser %}
+                                        <a class="dropdown-item" href="/schema">
+                                            <i class="fa fa-database me-2"></i>DB Schema
+                                        </a>
+                                    {% endif %}
+                                    <a class="dropdown-item" href="/audit-log">
+                                        <i class="fa fa-shield-halved me-2"></i>Audit Log
                                     </a>
                                     <a class="dropdown-item" href="/docs" target="_blank">
                                         <i class="fa fa-code me-2"></i>API Docs
@@ -69,6 +76,12 @@
                             </li>
                         {% endif %}
                         <li class="nav-item d-lg-none">
+                            <button type="button" class="nav-link w-100 text-start border-0 bg-transparent" data-theme-toggle aria-label="Toggle theme">
+                                <span class="nav-link-icon"><i class="fa fa-moon"></i></span>
+                                <span class="nav-link-title theme-toggle-label">Dark mode</span>
+                            </button>
+                        </li>
+                        <li class="nav-item d-lg-none">
                             <a class="nav-link" href="/logout">
                                 <span class="nav-link-icon"><i class="fa fa-right-from-bracket"></i></span>
                                 <span class="nav-link-title">Log out</span>
@@ -76,12 +89,20 @@
                         </li>
                     </ul>
                 </div>
-                <div class="sidebar-logout-desktop d-none d-lg-block">
-                    <a class="nav-link" href="/logout">
-                        <span class="nav-link-icon"><i class="fa fa-right-from-bracket"></i></span>
-                        <span class="nav-link-title">Log out</span>
-                    </a>
-                </div>
+                <ul class="navbar-nav sidebar-bottom-actions d-none d-lg-flex">
+                    <li class="nav-item sidebar-theme-desktop">
+                        <button type="button" class="nav-link w-100 text-start border-0 bg-transparent" data-theme-toggle aria-label="Toggle theme">
+                            <span class="nav-link-icon"><i class="fa fa-moon"></i></span>
+                            <span class="nav-link-title theme-toggle-label">Dark mode</span>
+                        </button>
+                    </li>
+                    <li class="nav-item sidebar-logout-desktop">
+                        <a class="nav-link" href="/logout">
+                            <span class="nav-link-icon"><i class="fa fa-right-from-bracket"></i></span>
+                            <span class="nav-link-title">Log out</span>
+                        </a>
+                    </li>
+                </ul>
             </div>
         </aside>
         <div class="page-wrapper">
@@ -117,6 +138,7 @@
             </div>
         </div>
     </div>
+    <div class="position-fixed top-0 end-0 p-3 admin-toast-stack" id="admin-toast-stack" aria-live="polite" aria-atomic="true"></div>
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/air-datepicker@3.5.3/air-datepicker.min.js"></script>
     <script>
@@ -389,6 +411,173 @@
         }
 
         return { show: show };
+    })();
+    </script>
+    <script>
+    window.AdminToast = (function() {
+        var stackEl = document.getElementById("admin-toast-stack");
+        var supported = !!(stackEl && typeof bootstrap !== "undefined" && bootstrap.Toast);
+
+        function escapeHtml(value) {
+            var d = document.createElement("div");
+            d.textContent = String(value == null ? "" : value);
+            return d.innerHTML;
+        }
+
+        function show(message, tone, timeoutMs) {
+            if (!message) return;
+            if (!supported) {
+                window.alert(String(message));
+                return;
+            }
+            var palette = tone || "danger";
+            var hideDelay = Number(timeoutMs || 3500);
+            var toastEl = document.createElement("div");
+            toastEl.className = "toast align-items-center border-0 mb-2 text-bg-" + palette;
+            toastEl.setAttribute("role", "status");
+            toastEl.setAttribute("aria-live", "polite");
+            toastEl.setAttribute("aria-atomic", "true");
+            toastEl.innerHTML =
+                '<div class="d-flex">' +
+                    '<div class="toast-body">' + escapeHtml(message) + "</div>" +
+                    '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>' +
+                "</div>";
+            stackEl.appendChild(toastEl);
+            var instance = bootstrap.Toast.getOrCreateInstance(toastEl, { delay: hideDelay });
+            toastEl.addEventListener("hidden.bs.toast", function() {
+                toastEl.remove();
+            });
+            instance.show();
+        }
+
+        return {
+            show: show,
+            success: function(message, timeoutMs) { show(message, "success", timeoutMs); },
+            info: function(message, timeoutMs) { show(message, "info", timeoutMs); },
+            warning: function(message, timeoutMs) { show(message, "warning", timeoutMs); },
+            error: function(message, timeoutMs) { show(message, "danger", timeoutMs); },
+        };
+    })();
+    </script>
+    <script>
+    window.AdminListUI = (function() {
+        function esc(value) {
+            var d = document.createElement("div");
+            d.textContent = String(value == null ? "" : value);
+            return d.innerHTML;
+        }
+
+        function stateRow(colspan, message, tone) {
+            var toneClass = tone === "danger" ? "text-danger" : "text-muted";
+            return '<tr><td colspan="' + colspan + '" class="text-center ' + toneClass + ' py-4">' + esc(message) + "</td></tr>";
+        }
+
+        function renderPagination(containerEl, infoEl, total, currentOffset, pageSize, callbackName) {
+            var page = Math.floor(currentOffset / pageSize) + 1;
+            var totalPages = Math.ceil(total / pageSize) || 1;
+            var from = total === 0 ? 0 : currentOffset + 1;
+            var to = Math.min(currentOffset + pageSize, total);
+            infoEl.textContent = "Showing " + from + "-" + to + " of " + total;
+            var btns = "";
+            if (page > 1) btns += '<button class="btn btn-sm" onclick="' + callbackName + "(" + (page - 1) + ')"><i class="fa fa-chevron-left"></i></button>';
+            btns += '<button class="btn btn-sm" disabled>Page ' + page + " of " + totalPages + "</button>";
+            if (page < totalPages) btns += '<button class="btn btn-sm" onclick="' + callbackName + "(" + (page + 1) + ')"><i class="fa fa-chevron-right"></i></button>';
+            containerEl.innerHTML = btns;
+        }
+
+        function makeRowKeyboardFriendly(rowEl, activateFn) {
+            if (!rowEl) return;
+            rowEl.setAttribute("tabindex", "0");
+            rowEl.setAttribute("role", "button");
+            rowEl.addEventListener("keydown", function(event) {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    activateFn();
+                }
+            });
+        }
+
+        return {
+            stateRow: stateRow,
+            renderPagination: renderPagination,
+            makeRowKeyboardFriendly: makeRowKeyboardFriendly,
+        };
+    })();
+    </script>
+    <script>
+    (function() {
+        var storageKey = 'admin-panel-theme';
+        var toggleButtons = Array.from(document.querySelectorAll('[data-theme-toggle]'));
+
+        function readStoredTheme() {
+            try {
+                var stored = localStorage.getItem(storageKey);
+                if (stored === 'light' || stored === 'dark') return stored;
+            } catch (e) {}
+            return null;
+        }
+
+        function preferredTheme() {
+            var stored = readStoredTheme();
+            if (stored) return stored;
+            return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
+        }
+
+        function applyTheme(theme) {
+            document.body.setAttribute('data-theme', theme);
+            document.documentElement.setAttribute('data-bs-theme', theme);
+            toggleButtons.forEach(function(btn) {
+                btn.innerHTML = theme === 'dark'
+                    ? '<span class="nav-link-icon"><i class="fa fa-sun"></i></span><span class="nav-link-title theme-toggle-label">Light mode</span>'
+                    : '<span class="nav-link-icon"><i class="fa fa-moon"></i></span><span class="nav-link-title theme-toggle-label">Dark mode</span>';
+            });
+        }
+
+        function persistTheme(theme) {
+            try {
+                localStorage.setItem(storageKey, theme);
+            } catch (e) {}
+        }
+
+        var activeTheme = preferredTheme();
+        applyTheme(activeTheme);
+
+        toggleButtons.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                activeTheme = activeTheme === 'dark' ? 'light' : 'dark';
+                applyTheme(activeTheme);
+                persistTheme(activeTheme);
+            });
+        });
+    })();
+    </script>
+    <script>
+    (function() {
+        function bindClickableRows(root) {
+            var scope = root || document;
+            scope.querySelectorAll("tr.clickable-row").forEach(function(row) {
+                if (row.dataset.keyboardBound === "1") return;
+                row.dataset.keyboardBound = "1";
+                row.setAttribute("tabindex", "0");
+                row.setAttribute("role", "button");
+                row.addEventListener("keydown", function(event) {
+                    if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        row.click();
+                    }
+                });
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            bindClickableRows(document);
+            var observer = new MutationObserver(function() {
+                bindClickableRows(document);
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
     })();
     </script>
     {% block script %}{% endblock %}

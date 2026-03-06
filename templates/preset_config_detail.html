@@ -301,7 +301,7 @@
                         </thead>
                         <tbody>
                             ${linked.map(m => `
-                                <tr style="cursor:pointer" onclick="window.location='/customers/${m.customer_id}'">
+                                <tr class="clickable-row" onclick="window.location='/customers/${m.customer_id}'">
                                     <td>
                                         <div class="fw-semibold">${esc(m.customer_name || m.customer_id)}</div>
                                         <div class="text-muted small">${esc(m.customer_id)}</div>

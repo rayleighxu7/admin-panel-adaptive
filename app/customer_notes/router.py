@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.common import mark_soft_deleted
 from app.database import get_db
 from app.models import Customer, CustomerNote
 
@@ -51,7 +52,7 @@ def _get_customer_or_404(db: Session, customer_id: str) -> Customer:
 
 
 @router.get("/{customer_id}/notes", response_model=NoteListResponse)
-async def list_notes(
+def list_notes(
     customer_id: str,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
@@ -69,7 +70,7 @@ async def list_notes(
 
 
 @router.post("/{customer_id}/notes", response_model=NoteOut, status_code=201)
-async def create_note(
+def create_note(
     customer_id: str,
     body: NoteCreate,
     db: Session = Depends(get_db),
@@ -83,7 +84,7 @@ async def create_note(
 
 
 @router.patch("/{customer_id}/notes/{note_id}", response_model=NoteOut)
-async def update_note(
+def update_note(
     customer_id: str,
     note_id: int,
     body: NoteUpdate,
@@ -100,7 +101,7 @@ async def update_note(
 
 
 @router.delete("/{customer_id}/notes/{note_id}", status_code=204)
-async def delete_note(
+def delete_note(
     customer_id: str,
     note_id: int,
     request: Request,
@@ -110,7 +111,5 @@ async def delete_note(
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
 
-    deleted_by = getattr(request.state, "admin_username", None) or request.session.get("admin_username") or "system"
-    note.deleted_at = datetime.utcnow()
-    note.deleted_by = deleted_by
+    mark_soft_deleted(note, request)
     db.commit()

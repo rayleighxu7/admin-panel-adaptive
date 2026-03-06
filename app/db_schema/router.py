@@ -1,10 +1,14 @@
 from pathlib import Path
+import csv
+import io
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import MetaData, Table, func, inspect as sa_inspect, select
 
+from app.config import settings
 from app.database import get_engine
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -15,6 +19,8 @@ router = APIRouter()
 
 @router.get("/schema", include_in_schema=False)
 async def schema_page(request: Request):
+    if not settings.ENABLE_SCHEMA_BROWSER:
+        raise HTTPException(status_code=404, detail="Schema browser is disabled")
     return templates.TemplateResponse(request=request, name="dev_database.html")
 
 
@@ -38,8 +44,6 @@ class TableInfo(BaseModel):
     columns: list[ColumnInfo]
     indexes: list[IndexInfo]
     row_count: int
-    sample_rows: list[dict]
-    col_names: list[str]
 
 
 class SchemaResponse(BaseModel):
@@ -50,7 +54,16 @@ class SchemaResponse(BaseModel):
 
 
 @router.get("/api/schema", response_model=SchemaResponse)
-async def get_schema():
+def get_schema(
+    include_counts: bool | None = Query(
+        None,
+        description="Include row counts for each table. Defaults to SCHEMA_INCLUDE_ROW_COUNTS.",
+    ),
+):
+    if not settings.ENABLE_SCHEMA_BROWSER:
+        raise HTTPException(status_code=404, detail="Schema browser is disabled")
+
+    counts_enabled = settings.SCHEMA_INCLUDE_ROW_COUNTS if include_counts is None else include_counts
     engine = get_engine()
     inspector = sa_inspect(engine)
     metadata = MetaData()
@@ -71,16 +84,11 @@ async def get_schema():
                 ref_col = fk["referred_columns"][i]
                 fk_map[col] = f'{fk["referred_table"]}.{ref_col}'
 
-        table_ref = Table(table_name, metadata, autoload_with=engine)
-        with engine.connect() as conn:
-            row_count = conn.execute(select(func.count()).select_from(table_ref)).scalar()
-            result = conn.execute(select(table_ref).limit(10))
-            sample_rows = [
-                {k: _serialise(v) for k, v in row._mapping.items()}
-                for row in result
-            ]
-
-        col_names = [c["name"] for c in columns]
+        row_count = 0
+        if counts_enabled:
+            table_ref = Table(table_name, metadata, autoload_with=engine)
+            with engine.connect() as conn:
+                row_count = conn.execute(select(func.count()).select_from(table_ref)).scalar()
         total_rows += row_count
         total_columns += len(columns)
 
@@ -108,8 +116,6 @@ async def get_schema():
                 for idx in indexes
             ],
             row_count=row_count,
-            sample_rows=sample_rows,
-            col_names=col_names,
         ))
 
     return SchemaResponse(
@@ -127,3 +133,60 @@ def _serialise(value: object) -> object:
     if isinstance(value, (int, float, bool)):
         return value
     return str(value)
+
+
+@router.get("/api/schema/export.csv", include_in_schema=False)
+def export_table_csv(
+    table_name: str,
+    limit: int | None = Query(
+        None,
+        ge=1,
+        description="Max rows to export. Defaults to SCHEMA_EXPORT_MAX_ROWS.",
+    ),
+):
+    if not settings.ENABLE_SCHEMA_BROWSER:
+        raise HTTPException(status_code=404, detail="Schema browser is disabled")
+
+    effective_limit = min(limit or settings.SCHEMA_EXPORT_MAX_ROWS, settings.SCHEMA_EXPORT_MAX_ROWS)
+    engine = get_engine()
+    inspector = sa_inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if table_name not in table_names:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    metadata = MetaData()
+    table_ref = Table(table_name, metadata, autoload_with=engine)
+    columns = [col.name for col in table_ref.columns]
+
+    def stream_rows():
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(columns)
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        with engine.connect() as conn:
+            result = conn.execute(select(table_ref).limit(effective_limit))
+            row_count = 0
+            for row in result:
+                writer.writerow([_serialise(row._mapping.get(col)) for col in columns])
+                row_count += 1
+                if row_count % 500 == 0:
+                    yield output.getvalue()
+                    output.seek(0)
+                    output.truncate(0)
+
+        remainder = output.getvalue()
+        if remainder:
+            yield remainder
+        output.close()
+
+    return StreamingResponse(
+        stream_rows(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{table_name}.csv"',
+            "X-Export-Row-Limit": str(effective_limit),
+        },
+    )

@@ -28,7 +28,7 @@ async def login_page(request: Request, next: str | None = None):
 
 
 @router.post("/login", include_in_schema=False)
-async def login_submit(
+def login_submit(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),

@@ -8,9 +8,10 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.common import mark_soft_deleted
 from app.database import get_db
 from app.models import Customer, CustomerConfigMatrix, CustomConfig, PresetConfig
-from app.preset_configs.router import ConfigSchema
+from app.schemas import ConfigSchema
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -105,7 +106,7 @@ def _to_out(m: CustomerConfigMatrix) -> ConfigMatrixOut:
 
 
 @router.get("", response_model=ConfigMatrixListResponse)
-async def list_config_matrix(
+def list_config_matrix(
     customer_id: str | None = Query(None, description="Filter by customer"),
     config_type: Literal["preset", "custom"] | None = Query(None, description="Filter by config type"),
     preset_config_id: int | None = Query(None, description="Filter by preset config ID"),
@@ -140,7 +141,7 @@ async def list_config_matrix(
 
 
 @router.get("/{matrix_id}", response_model=ConfigMatrixOut)
-async def get_config_matrix(matrix_id: int, db: Session = Depends(get_db)):
+def get_config_matrix(matrix_id: int, db: Session = Depends(get_db)):
     m = _active_query(db).filter(CustomerConfigMatrix.id == matrix_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Config matrix entry not found")
@@ -148,7 +149,7 @@ async def get_config_matrix(matrix_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=ConfigMatrixOut, status_code=201)
-async def create_config_matrix(body: ConfigMatrixCreate, db: Session = Depends(get_db)):
+def create_config_matrix(body: ConfigMatrixCreate, db: Session = Depends(get_db)):
     customer = db.query(Customer).filter(
         Customer.id == body.customer_id, Customer.deleted_at.is_(None)
     ).first()
@@ -163,6 +164,21 @@ async def create_config_matrix(body: ConfigMatrixCreate, db: Session = Depends(g
         ).first()
         if not preset:
             raise HTTPException(status_code=404, detail="Preset config not found")
+
+    same_day_conflict = (
+        db.query(CustomerConfigMatrix.id)
+        .filter(
+            CustomerConfigMatrix.customer_id == body.customer_id,
+            CustomerConfigMatrix.effective_from == body.effective_from,
+            CustomerConfigMatrix.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if same_day_conflict:
+        raise HTTPException(
+            status_code=409,
+            detail="An assignment for this customer already exists on that effective date",
+        )
 
     if body.custom_config:
         custom = CustomConfig(config=body.custom_config.model_dump())
@@ -189,7 +205,7 @@ async def create_config_matrix(body: ConfigMatrixCreate, db: Session = Depends(g
 
 
 @router.patch("/{matrix_id}", response_model=ConfigMatrixOut)
-async def update_config_matrix(
+def update_config_matrix(
     matrix_id: int,
     body: ConfigMatrixUpdate,
     db: Session = Depends(get_db),
@@ -221,7 +237,23 @@ async def update_config_matrix(
         m.preset_config_id = None
 
     if "effective_from" in updates:
-        m.effective_from = updates["effective_from"]
+        proposed_effective_from = updates["effective_from"]
+        same_day_conflict = (
+            db.query(CustomerConfigMatrix.id)
+            .filter(
+                CustomerConfigMatrix.customer_id == m.customer_id,
+                CustomerConfigMatrix.id != m.id,
+                CustomerConfigMatrix.effective_from == proposed_effective_from,
+                CustomerConfigMatrix.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if same_day_conflict:
+            raise HTTPException(
+                status_code=409,
+                detail="Another assignment already exists for this customer on that effective date",
+            )
+        m.effective_from = proposed_effective_from
 
     try:
         db.commit()
@@ -235,7 +267,7 @@ async def update_config_matrix(
 
 
 @router.delete("/{matrix_id}", status_code=204)
-async def delete_config_matrix(
+def delete_config_matrix(
     matrix_id: int,
     request: Request,
     db: Session = Depends(get_db),
@@ -248,7 +280,5 @@ async def delete_config_matrix(
     if not m:
         raise HTTPException(status_code=404, detail="Config matrix entry not found")
 
-    deleted_by = getattr(request.state, "admin_username", None) or request.session.get("admin_username") or "system"
-    m.deleted_at = datetime.utcnow()
-    m.deleted_by = deleted_by
+    mark_soft_deleted(m, request)
     db.commit()

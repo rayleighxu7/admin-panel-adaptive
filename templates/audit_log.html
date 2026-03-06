@@ -1,0 +1,168 @@
+{% extends "layout.html" %}
+
+{% block title %}Audit Log — Admin Panel{% endblock %}
+
+{% block header %}
+    <div class="row align-items-center">
+        <div class="col">
+            <h2 class="page-title">
+                <i class="fa fa-shield-halved me-2"></i>Audit Log
+            </h2>
+            <div class="text-muted mt-1" id="audit-summary">Loading&hellip;</div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<div class="col-12">
+    <div class="card">
+        <div class="card-header list-header-row">
+            <div class="col list-toolbar">
+                <input type="text" class="form-control filter-control" id="actor-filter"
+                       placeholder="Filter by actor&hellip;">
+                <select class="form-select filter-control" id="method-filter">
+                    <option value="">All Methods</option>
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="PATCH">PATCH</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter table-hover card-table table-modern">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Actor</th>
+                        <th>Operation</th>
+                        <th>Endpoint</th>
+                        <th>Result</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-tbody">
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="fa fa-spinner fa-spin me-1"></i> Loading&hellip;
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer d-flex align-items-center">
+            <div class="text-muted" id="pagination-info"></div>
+            <div class="ms-auto btn-group" id="pagination-btns"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+(function() {
+    const API = '/api/audit-log';
+    const tbody = document.getElementById('audit-tbody');
+    const summary = document.getElementById('audit-summary');
+    const actorFilter = document.getElementById('actor-filter');
+    const methodFilter = document.getElementById('method-filter');
+    const paginationInfo = document.getElementById('pagination-info');
+    const paginationBtns = document.getElementById('pagination-btns');
+
+    let currentOffset = 0;
+    const LIMIT = 50;
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = String(str ?? '');
+        return d.innerHTML;
+    }
+
+    function formatDateTime(iso) {
+        return new Date(iso).toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    }
+
+    function statusBadge(statusCode, statusLabel, tone, hasError) {
+        const toneClass = tone === 'danger'
+            ? 'bg-danger-lt text-danger'
+            : tone === 'warning'
+                ? 'bg-yellow-lt text-yellow'
+                : 'bg-green-lt text-green';
+        const icon = hasError ? '<i class="fa fa-triangle-exclamation me-1"></i>' : '';
+        return `<span class="badge ${toneClass}">${icon}${statusCode} ${esc(statusLabel)}</span>`;
+    }
+
+    function loadAuditLogs() {
+        let url = `${API}?limit=${LIMIT}&offset=${currentOffset}`;
+        const actor = actorFilter.value.trim();
+        const method = methodFilter.value;
+
+        if (actor) url += `&actor=${encodeURIComponent(actor)}`;
+        if (method) url += `&method=${encodeURIComponent(method)}`;
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                summary.textContent = `${data.total} log entr${data.total === 1 ? 'y' : 'ies'}`;
+                renderTable(data.entries);
+                renderPagination(data.total);
+            })
+            .catch(err => {
+                tbody.innerHTML = window.AdminListUI.stateRow(6, `Failed to load: ${err.message}`, 'danger');
+                window.AdminToast.error(err.message || 'Failed to load audit logs');
+            });
+    }
+
+    function renderTable(entries) {
+        if (!entries.length) {
+            tbody.innerHTML = window.AdminListUI.stateRow(6, 'No audit entries found', 'muted');
+            return;
+        }
+
+        tbody.innerHTML = entries.map(entry => `
+            <tr>
+                <td class="text-meta">${formatDateTime(entry.event_time_utc)}</td>
+                <td>${entry.admin_username ? esc(entry.admin_username) : '<span class="text-muted">system/unknown</span>'}</td>
+                <td>
+                    <span class="fw-semibold">${esc(entry.operation_summary)}</span>
+                    <div class="text-meta">${esc(entry.method)}</div>
+                </td>
+                <td><code>${esc(entry.endpoint)}</code></td>
+                <td>${statusBadge(entry.response_status_code, entry.response_status_label, entry.status_tone, entry.has_error)}</td>
+                <td class="text-meta">${entry.detail_summary ? esc(entry.detail_summary) : '—'}</td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPagination(total) {
+        window.AdminListUI.renderPagination(paginationBtns, paginationInfo, total, currentOffset, LIMIT, 'goToAuditPage');
+    }
+
+    window.goToAuditPage = function(page) {
+        currentOffset = (page - 1) * LIMIT;
+        loadAuditLogs();
+    };
+
+    let filterTimeout;
+    function applyFilters() {
+        clearTimeout(filterTimeout);
+        filterTimeout = setTimeout(function() {
+            currentOffset = 0;
+            loadAuditLogs();
+        }, 250);
+    }
+
+    actorFilter.addEventListener('input', applyFilters);
+    methodFilter.addEventListener('change', applyFilters);
+
+    loadAuditLogs();
+})();
+</script>
+{% endblock %}

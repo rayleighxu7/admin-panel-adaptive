@@ -9,6 +9,8 @@ Adaptive Admin Panel is a FastAPI + SQLAlchemy application for managing customer
 - Soft-delete support for business entities (`deleted_at` / `deleted_by`)
 - Audit logging for all mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`)
 - Database schema explorer (`/schema`) with resizable table columns
+- Bulk actions for admin workflows
+- Customer activity timeline (notes + assignments + audit excerpts)
 - Brand theming via environment-driven color variables
 
 ## Supported Databases
@@ -292,9 +294,12 @@ statics/
 | `ENABLE_SCHEMA_BROWSER` | `true` | Enable DB schema explorer routes (`/schema`, `/api/schema`) |
 | `ENABLE_SCHEMA_SAMPLE_ROWS` | `true` | Include sample row data in schema API responses |
 | `SCHEMA_SAMPLE_LIMIT` | `10` | Max sample rows per table when enabled |
+| `SCHEMA_INCLUDE_ROW_COUNTS` | `true` | Include per-table row counts in `/api/schema` responses |
+| `SCHEMA_EXPORT_MAX_ROWS` | `5000` | Hard cap for `/api/schema/export.csv` row exports |
 | `BRAND_PRIMARY` | `#206bc4` | UI primary color |
 | `BRAND_SIDEBAR_BG` | `#1b2434` | Sidebar background color |
 | `BRAND_SIDEBAR_TEXT` | `#ffffff` | Sidebar text color |
+| `BRAND_LOGO_URL` | `/images/freelanxur-logo-transparent.PNG` | Sidebar logo image URL/path |
 
 Create or rotate an admin user manually:
 

@@ -22,10 +22,13 @@ class Settings(BaseSettings):
     ENABLE_SCHEMA_BROWSER: bool = True
     ENABLE_SCHEMA_SAMPLE_ROWS: bool = True
     SCHEMA_SAMPLE_LIMIT: int = 10
+    SCHEMA_INCLUDE_ROW_COUNTS: bool = True
+    SCHEMA_EXPORT_MAX_ROWS: int = 5000
 
     BRAND_PRIMARY: str = "#206bc4"
     BRAND_SIDEBAR_BG: str = "#1b2434"
     BRAND_SIDEBAR_TEXT: str = "#ffffff"
+    BRAND_LOGO_URL: str = "/images/freelanxur-logo-transparent.PNG"
     BRAND_ACCENT: str = "#206bc4"
     BRAND_DANGER: str = "#d63939"
     BRAND_SUCCESS: str = "#2fb344"

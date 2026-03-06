@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import json
+import logging
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -11,6 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.auth_router import router as auth_router
+from app.audit_log.router import page_router as audit_log_page_router, router as audit_log_router
 from app.branding import router as branding_router
 from app.config import settings
 from app.config_matrix import page_router as matrix_page_router, router as config_matrix_router
@@ -22,6 +24,7 @@ from app.models import AdminUser, AuditLog
 from app.preset_configs import page_router as presets_page_router, router as preset_configs_router
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+logger = logging.getLogger(__name__)
 
 create_engine()
 
@@ -93,12 +96,17 @@ async def _parse_request_body(request: Request) -> dict:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.ENABLE_AUTH and settings.SECRET_KEY == "change-me-in-production":
+        logger.warning("ENABLE_AUTH is true while SECRET_KEY is using the default value.")
     yield
     dispose_engine()
 
 
 app = FastAPI(title="Adaptive Admin Panel", debug=settings.DEBUG, lifespan=lifespan)
+app.state.brand_logo_url = settings.BRAND_LOGO_URL
+app.state.enable_schema_browser = settings.ENABLE_SCHEMA_BROWSER
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "statics")), name="static")
+app.mount("/images", StaticFiles(directory=str(BASE_DIR / "images")), name="images")
 
 class SecurityMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -110,7 +118,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         is_logout = path == "/logout"
         is_audit_path = path.startswith("/api/audit-log")
         is_reference_path = (
-            path in {"/schema", "/api/schema", "/openapi.json", "/redoc"}
+            path in {"/schema", "/openapi.json", "/redoc"}
+            or path.startswith("/api/schema")
             or path.startswith("/docs")
         )
         should_audit = (
@@ -201,7 +210,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                         db.commit()
                 except Exception:
                     # Never block application flow due to audit logging failures.
-                    pass
+                    logger.exception(
+                        "Failed to persist audit row",
+                        extra={"audit_method": method, "audit_path": path},
+                    )
 
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -225,14 +237,17 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(branding_router)
+app.include_router(audit_log_page_router)
 app.include_router(customers_page_router)
 app.include_router(presets_page_router)
 app.include_router(matrix_page_router)
+app.include_router(audit_log_router, prefix="/api/audit-log", tags=["audit-log"])
 app.include_router(customers_router, prefix="/api/customers", tags=["customers"])
 app.include_router(customer_notes_router, prefix="/api/customers", tags=["customer-notes"])
 app.include_router(preset_configs_router, prefix="/api/preset-configs", tags=["preset-configs"])
 app.include_router(config_matrix_router, prefix="/api/config-matrix", tags=["config-matrix"])
-app.include_router(schema_router, tags=["schema"])
+if settings.ENABLE_SCHEMA_BROWSER:
+    app.include_router(schema_router, tags=["schema"])
 
 
 @app.get("/")

@@ -25,6 +25,12 @@
                 </div>
             </div>
             <div class="col-auto ms-auto ps-2 list-toolbar-actions">
+                <button class="btn btn-sm" type="button" id="bulk-delete-btn" onclick="bulkDeleteCustomers()" disabled>
+                    <i class="fa fa-trash me-1"></i>Delete Selected
+                </button>
+                <button class="btn" id="export-customers-btn" onclick="exportCustomersCsv()">
+                    <i class="fa fa-file-csv me-1"></i>Export CSV
+                </button>
                 <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#customer-drawer" onclick="openCreateModal()">
                     <i class="fa fa-plus me-1"></i>New Customer
                 </button>
@@ -34,6 +40,9 @@
             <table class="table table-vcenter table-hover card-table table-modern">
                 <thead>
                     <tr>
+                        <th class="table-select-col text-center">
+                            <input type="checkbox" id="select-all-customers" aria-label="Select all customers on page">
+                        </th>
                         <th>Name</th>
                         <th>Email</th>
                         <th>Phone</th>
@@ -44,7 +53,7 @@
                 </thead>
                 <tbody id="customers-tbody">
                     <tr>
-                        <td colspan="6" class="text-center text-muted py-4">
+                        <td colspan="7" class="text-center text-muted py-4">
                             <i class="fa fa-spinner fa-spin me-1"></i> Loading&hellip;
                         </td>
                     </tr>
@@ -107,10 +116,14 @@
     const searchInput = document.getElementById('search-input');
     const paginationInfo = document.getElementById('pagination-info');
     const paginationBtns = document.getElementById('pagination-btns');
+    const exportBtn = document.getElementById('export-customers-btn');
+    const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+    const selectAllCheckbox = document.getElementById('select-all-customers');
 
     let currentSearch = '';
     let currentOffset = 0;
     const LIMIT = 25;
+    const selectedCustomers = new Set();
 
     function esc(str) {
         const d = document.createElement('div');
@@ -121,6 +134,49 @@
     function formatDate(iso) {
         const d = new Date(iso);
         return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function csvEscape(value) {
+        const raw = value == null ? '' : String(value);
+        if (raw.includes('"') || raw.includes(',') || raw.includes('\n')) {
+            return '"' + raw.replace(/"/g, '""') + '"';
+        }
+        return raw;
+    }
+
+    function downloadCsv(filename, rows) {
+        const csv = rows.map(row => row.map(csvEscape).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    async function fetchAllCustomers() {
+        const pageSize = 200;
+        let offset = 0;
+        let total = 0;
+        const allRows = [];
+
+        do {
+            let url = `${API}?limit=${pageSize}&offset=${offset}`;
+            if (currentSearch) url += `&search=${encodeURIComponent(currentSearch)}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Failed to fetch customers for export');
+            const data = await response.json();
+            total = Number(data.total || 0);
+            const rows = Array.isArray(data.customers) ? data.customers : [];
+            allRows.push(...rows);
+            offset += rows.length;
+            if (!rows.length) break;
+        } while (offset < total);
+
+        return allRows;
     }
 
     function loadCustomers() {
@@ -135,18 +191,22 @@
                 renderPagination(data.total);
             })
             .catch(err => {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">Failed to load: ${esc(err.message)}</td></tr>`;
+                tbody.innerHTML = window.AdminListUI.stateRow(7, `Failed to load: ${err.message}`, 'danger');
+                window.AdminToast.error(err.message || 'Failed to load customers');
             });
     }
 
     function renderTable(customers) {
         if (customers.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No customers found</td></tr>';
+            tbody.innerHTML = window.AdminListUI.stateRow(7, 'No customers found', 'muted');
             return;
         }
 
         tbody.innerHTML = customers.map(c => `
             <tr class="clickable-row" onclick="if(!event.target.closest('.dropdown'))window.location='/customers/${c.id}'">
+                <td class="text-center">
+                    <input type="checkbox" class="customer-select" data-customer-id="${c.id}" ${selectedCustomers.has(c.id) ? 'checked' : ''} aria-label="Select ${esc(c.name)}">
+                </td>
                 <td>
                     <a class="fw-semibold text-reset text-decoration-none" href="/customers/${c.id}">${esc(c.name)}</a>
                     <div class="text-meta">${esc(c.id)}</div>
@@ -171,27 +231,81 @@
                     </div>
                 </td>
             </tr>`).join('');
+        bindSelectionEvents();
     }
 
     function renderPagination(total) {
-        const page = Math.floor(currentOffset / LIMIT) + 1;
-        const totalPages = Math.ceil(total / LIMIT) || 1;
-        const from = total === 0 ? 0 : currentOffset + 1;
-        const to = Math.min(currentOffset + LIMIT, total);
-
-        paginationInfo.textContent = `Showing ${from}–${to} of ${total}`;
-
-        let btns = '';
-        if (page > 1) btns += `<button class="btn btn-sm" onclick="goToPage(${page - 1})"><i class="fa fa-chevron-left"></i></button>`;
-        btns += `<button class="btn btn-sm" disabled>Page ${page} of ${totalPages}</button>`;
-        if (page < totalPages) btns += `<button class="btn btn-sm" onclick="goToPage(${page + 1})"><i class="fa fa-chevron-right"></i></button>`;
-        paginationBtns.innerHTML = btns;
+        window.AdminListUI.renderPagination(paginationBtns, paginationInfo, total, currentOffset, LIMIT, 'goToPage');
     }
 
     window.goToPage = function(page) {
         currentOffset = (page - 1) * LIMIT;
         loadCustomers();
     };
+
+    window.exportCustomersCsv = async function() {
+        const original = exportBtn.innerHTML;
+        exportBtn.disabled = true;
+        exportBtn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i>Exporting...';
+        try {
+            const customers = await fetchAllCustomers();
+            const rows = [
+                ['id', 'name', 'email', 'phone', 'address', 'date_of_birth', 'created_at', 'updated_at']
+            ];
+            customers.forEach(c => {
+                rows.push([
+                    c.id,
+                    c.name,
+                    c.email,
+                    c.phone || '',
+                    c.address || '',
+                    c.date_of_birth || '',
+                    c.created_at || '',
+                    c.updated_at || '',
+                ]);
+            });
+            downloadCsv('customers_export.csv', rows);
+        } catch (err) {
+            window.AdminToast.error(err.message || 'Export failed');
+        } finally {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = original;
+        }
+    };
+
+    function updateBulkActionState() {
+        bulkDeleteBtn.disabled = selectedCustomers.size === 0;
+        bulkDeleteBtn.innerHTML = selectedCustomers.size > 0
+            ? `<i class="fa fa-trash me-1"></i>Delete Selected (${selectedCustomers.size})`
+            : '<i class="fa fa-trash me-1"></i>Delete Selected';
+    }
+
+    function bindSelectionEvents() {
+        const checks = Array.from(document.querySelectorAll('.customer-select'));
+        checks.forEach(el => {
+            el.addEventListener('click', e => e.stopPropagation());
+            el.addEventListener('change', function() {
+                const id = this.dataset.customerId;
+                if (!id) return;
+                if (this.checked) selectedCustomers.add(id);
+                else selectedCustomers.delete(id);
+                updateBulkActionState();
+            });
+        });
+        selectAllCheckbox.checked = checks.length > 0 && checks.every(el => el.checked);
+        updateBulkActionState();
+    }
+
+    selectAllCheckbox.addEventListener('change', function() {
+        document.querySelectorAll('.customer-select').forEach(el => {
+            el.checked = this.checked;
+            const id = el.dataset.customerId;
+            if (!id) return;
+            if (this.checked) selectedCustomers.add(id);
+            else selectedCustomers.delete(id);
+        });
+        updateBulkActionState();
+    });
 
     let searchTimeout;
     searchInput.addEventListener('input', function() {
@@ -312,9 +426,34 @@
             fetch(`${API}/${id}`, { method: 'DELETE' })
                 .then(r => {
                     if (!r.ok) throw new Error('Delete failed');
+                    selectedCustomers.delete(id);
                     loadCustomers();
                 })
-                .catch(err => alert(err.message));
+                .catch(err => window.AdminToast.error(err.message || 'Delete failed'));
+        });
+    };
+
+    window.bulkDeleteCustomers = function() {
+        if (!selectedCustomers.size) return;
+        window.AdminConfirmDialog.show({
+            title: 'Delete selected customers',
+            message: `Delete ${selectedCustomers.size} selected customer(s)?`,
+            confirmText: 'Delete',
+            confirmClass: 'btn-danger'
+        }).then(async function(confirmed) {
+            if (!confirmed) return;
+            const ids = Array.from(selectedCustomers);
+            let failed = 0;
+            for (const id of ids) {
+                const resp = await fetch(`${API}/${id}`, { method: 'DELETE' });
+                if (!resp.ok) failed += 1;
+            }
+            if (failed) window.AdminToast.warning(`${failed} deletions failed`);
+            else window.AdminToast.success('Selected customers deleted');
+            selectedCustomers.clear();
+            selectAllCheckbox.checked = false;
+            updateBulkActionState();
+            loadCustomers();
         });
     };
 
